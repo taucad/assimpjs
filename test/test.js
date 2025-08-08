@@ -286,9 +286,9 @@ it ('MS3D', function () {
 });
 
 it ('NFF', function () {
-	assert (IsSuccess (['NFF/NFF/cylinder.nff']));
-	assert (IsSuccess (['NFF/NFF/hexahedron.nff']));
-	assert (IsSuccess (['NFF/NFF/spheres.nff']));
+	assert (IsSuccess (['NFF/cylinder.nff']));
+	assert (IsSuccess (['NFF/hexahedron.nff']));
+	assert (IsSuccess (['NFF/spheres.nff']));
 });
 
 it ('OBJ', function () {
@@ -371,6 +371,21 @@ it ('XGL', function () {
 	assert (IsSuccess (['XGL/cubes_with_alpha.zgl']));
 	assert (IsSuccess (['XGL/sample_official.xgl']));
 	assert (IsSuccess (['XGL/Wuson.zgl']));
+});
+
+it ('USD', function () {
+	// USD importer is enabled with tinyusdz
+	// Note: USD files are in models-nonbsd directory
+	assert (IsSuccess (['../models-nonbsd/USD/usda/texturedcube.usda']));
+	assert (IsSuccess (['../models-nonbsd/USD/usda/translated-cube.usda']));
+	assert (IsSuccess (['../models-nonbsd/USD/usda/blendshape.usda']));
+	assert (IsSuccess (['../models-nonbsd/USD/usda/simple-skin-test.usda']));
+	assert (IsSuccess (['../models-nonbsd/USD/usda/simple-skin-animation-test.usda']));
+	
+	assert (IsSuccess (['../models-nonbsd/USD/usdc/texturedcube.usdc']));
+	assert (IsSuccess (['../models-nonbsd/USD/usdc/translated-cube.usdc']));
+	assert (IsSuccess (['../models-nonbsd/USD/usdc/blendshape.usdc']));
+	assert (IsSuccess (['../models-nonbsd/USD/usdc/suzanne.usdc']));
 });
 
 });

@@ -15,6 +15,8 @@ set (BUILD_SHARED_LIBS OFF CACHE BOOL "")
 set (ASSIMP_BUILD_TESTS OFF CACHE BOOL "")
 set (ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "")
 set (ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "")
+
+# Enable only essential exporters
 set (ASSIMP_BUILD_ASSJSON_EXPORTER ON CACHE BOOL "")
 set (ASSIMP_BUILD_GLTF_EXPORTER ON CACHE BOOL "")
 
@@ -39,10 +41,50 @@ set (ASSIMP_BUILD_TERRAGEN_IMPORTER OFF CACHE BOOL "")
 # this dramatically decreases the wasm file size
 set (ASSIMP_BUILD_IFC_IMPORTER OFF CACHE BOOL "")
 
+# enable USD importer with optimized tinyusdz using proven EMSCRIPTEN config
+set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
+
+# Apply tinyusdz proven EMSCRIPTEN configuration
+if (EMSCRIPTEN)
+	# Critical: Enable production build to reduce memory usage and complexity
+	set (TINYUSDZ_PRODUCTION_BUILD ON CACHE BOOL "" FORCE)
+	set (TINYUSDZ_NO_WERROR ON CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_BUILTIN_IMAGE_LOADER ON CACHE BOOL "" FORCE)
+	set (TINYUSDZ_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_C_API OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_PXR_COMPAT_API OFF CACHE BOOL "" FORCE)
+	# Critical: Disable C++ exceptions to reduce WASM memory overhead
+	set (TINYUSDZ_CXX_EXCEPTIONS OFF CACHE BOOL "" FORCE)
+	# Disable optional parsers to reduce complexity
+	set (TINYUSDZ_WITH_USDA_PARSER OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_USDC_PARSER OFF CACHE BOOL "" FORCE)
+	# Disable additional features to reduce WASM memory pressure
+	set (TINYUSDZ_WITH_USDMTLX OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_JSON OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_USD_TO_GLTF OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_USDOBJ OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_USDFBX OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_USDVOX OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_OPENSUBDIV OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_AUDIO OFF CACHE BOOL "" FORCE)
+	set (TINYUSDZ_WITH_ALAC_AUDIO OFF CACHE BOOL "" FORCE)
+	
+	# CRITICAL: Use same optimization flags as tinyusdz web build
+	# Reference: https://raw.githubusercontent.com/lighttransport/tinyusdz/refs/heads/release/web/CMakeLists.txt
+	if (CMAKE_BUILD_TYPE STREQUAL "Release")
+		set(CMAKE_CXX_FLAGS_RELEASE "-Oz -DNDEBUG")
+		set(CMAKE_C_FLAGS_RELEASE "-Oz -DNDEBUG")
+	endif()
+endif()
+
+# build zlib from sources instead of looking for system zlib
+set (ASSIMP_BUILD_ZLIB ON CACHE BOOL "")
+
 add_subdirectory (assimp)
 
 if (${EMSCRIPTEN})
-	target_compile_options (assimp PUBLIC -fexceptions -Wno-unused-but-set-variable)
+	target_compile_options (assimp PUBLIC -fexceptions -Wno-unused-but-set-variable -Wno-unused-const-variable)
 endif ()
 
 # AssimpJS
@@ -62,13 +104,29 @@ if (${EMSCRIPTEN})
 
 	target_link_options (AssimpJS PUBLIC -sMODULARIZE=1)
 	target_link_options (AssimpJS PUBLIC -sEXPORT_NAME=assimpjs)
-	target_link_options (AssimpJS PUBLIC -sALLOW_MEMORY_GROWTH=1 --no-heap-copy)
 	target_link_options (AssimpJS PUBLIC -sNO_DISABLE_EXCEPTION_CATCHING)
+
+	# Production: Disable assertions for smaller WASM size (enable -sASSERTIONS=1 for debugging)
+	# target_link_options (AssimpJS PUBLIC -sASSERTIONS=1 -sSAFE_HEAP=1 -sWARN_UNALIGNED=1)
+	target_link_options (AssimpJS PUBLIC -sASSERTIONS=0)            # Disable assertions for production
 	
-	# to check for memory errors
-	#target_link_options (AssimpJS PUBLIC -sASSERTIONS=1 -sSAFE_HEAP=1 -sWARN_UNALIGNED=1)
+	# Javascript size optimizations
+	target_link_options (AssimpJS PUBLIC --closure=1)               # Google Closure Compiler optimization
 	
-	target_link_options (AssimpJS PUBLIC --bind)
+	# Dynamic memory management for variable file sizes
+	target_link_options (AssimpJS PUBLIC -sALLOW_MEMORY_GROWTH=1 --no-heap-copy)   # Allow unlimited memory growth as needed
+	
+  # Remove unnecessary runtime features (keeping safe ones)
+	target_link_options (AssimpJS PUBLIC -sSUPPORT_LONGJMP=0)
+	target_link_options (AssimpJS PUBLIC -sSUPPORT_ERRNO=0)
+	target_link_options (AssimpJS PUBLIC -sNO_EXIT_RUNTIME=1)       # Don't include exit handling
+	
+	# Essential flags for compatibility
+	target_link_options (AssimpJS PUBLIC -sINVOKE_RUN=0)            # Don't auto-run
+	target_link_options (AssimpJS PUBLIC --bind)                    # Enable embind
+	target_link_options (AssimpJS PUBLIC -sWASM_BIGINT)
+	target_link_options (AssimpJS PUBLIC -sLLD_REPORT_UNDEFINED)
+	target_link_options (AssimpJS PUBLIC -sNO_FILESYSTEM=0)
 else ()
 	add_library (AssimpJS ${AssimpJSSourceFiles})
 endif ()
