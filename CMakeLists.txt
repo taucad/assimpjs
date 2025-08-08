@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.6)
 set_property (GLOBAL PROPERTY USE_FOLDERS ON)
 
 set (CMAKE_SUPPRESS_REGENERATION 1)
-set (CMAKE_CONFIGURATION_TYPES Debug;Release;RelWithDebInfo;MinSizeRel)
+set (CMAKE_CONFIGURATION_TYPES Debug;Release;Release-Server;RelWithDebInfo;MinSizeRel)
 
 add_definitions (-DUNICODE -D_UNICODE)
 
@@ -44,38 +44,29 @@ set (ASSIMP_BUILD_IFC_IMPORTER OFF CACHE BOOL "")
 # enable USD importer with optimized tinyusdz using proven EMSCRIPTEN config
 set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
 
-# Apply tinyusdz proven EMSCRIPTEN configuration
-if (EMSCRIPTEN)
-	# Critical: Enable production build to reduce memory usage and complexity
-	set (TINYUSDZ_PRODUCTION_BUILD ON CACHE BOOL "" FORCE)
-	set (TINYUSDZ_NO_WERROR ON CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_BUILTIN_IMAGE_LOADER ON CACHE BOOL "" FORCE)
-	set (TINYUSDZ_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_C_API OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_PXR_COMPAT_API OFF CACHE BOOL "" FORCE)
-	# Critical: Disable C++ exceptions to reduce WASM memory overhead
-	set (TINYUSDZ_CXX_EXCEPTIONS OFF CACHE BOOL "" FORCE)
-	# Disable optional parsers to reduce complexity
-	set (TINYUSDZ_WITH_USDA_PARSER OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_USDC_PARSER OFF CACHE BOOL "" FORCE)
-	# Disable additional features to reduce WASM memory pressure
-	set (TINYUSDZ_WITH_USDMTLX OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_JSON OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_USD_TO_GLTF OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_USDOBJ OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_USDFBX OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_USDVOX OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_OPENSUBDIV OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_AUDIO OFF CACHE BOOL "" FORCE)
-	set (TINYUSDZ_WITH_ALAC_AUDIO OFF CACHE BOOL "" FORCE)
-	
-	# CRITICAL: Use same optimization flags as tinyusdz web build
-	# Reference: https://raw.githubusercontent.com/lighttransport/tinyusdz/refs/heads/release/web/CMakeLists.txt
-	if (CMAKE_BUILD_TYPE STREQUAL "Release")
-		set(CMAKE_CXX_FLAGS_RELEASE "-Oz -DNDEBUG")
-		set(CMAKE_C_FLAGS_RELEASE "-Oz -DNDEBUG")
-	endif()
+if (${EMSCRIPTEN})
+  # Web-optimized: Smallest size for web deployment
+  if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_CXX_FLAGS_RELEASE "-Oz -DNDEBUG -flto")
+    set(CMAKE_C_FLAGS_RELEASE "-Oz -DNDEBUG -flto")
+  endif()
+
+  # Server-optimized: Maximum performance for server deployment
+  if (CMAKE_BUILD_TYPE STREQUAL "Release-Server")
+    # Core performance flags
+    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "-O3 -DNDEBUG -flto")
+    
+    # Advanced performance optimizations  
+    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -funroll-loops")
+    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -finline-functions")
+    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -ffast-math")
+    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -fomit-frame-pointer")
+    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -march=native")
+    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -mtune=native")
+
+    # Copy all C++ flags to C flags (after all flags are set)
+    set(CMAKE_C_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER}")
+  endif()
 endif()
 
 # build zlib from sources instead of looking for system zlib
