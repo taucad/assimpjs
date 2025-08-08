@@ -91,10 +91,10 @@ void FileList::AddFileEmscripten (const std::string& path, const emscripten::val
 std::string GetFileName (const std::string& path)
 {
 	size_t lastSeparator = path.find_last_of ('/');
-	if (lastSeparator == std::wstring::npos) {
+	if (lastSeparator == std::string::npos) {
 		lastSeparator = path.find_last_of ('\\');
 	}
-	if (lastSeparator == std::wstring::npos) {
+	if (lastSeparator == std::string::npos) {
 		return ToLowercase (path);
 	}
 	std::string fileName = path.substr (lastSeparator + 1, path.length () - lastSeparator - 1);
