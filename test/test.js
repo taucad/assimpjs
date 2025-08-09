@@ -374,7 +374,6 @@ it ('XGL', function () {
 });
 
 it ('USD', function () {
-	// USD importer is enabled with tinyusdz
 	// Note: USD files are in models-nonbsd directory
 	assert (IsSuccess (['../models-nonbsd/USD/usda/texturedcube.usda']));
 	assert (IsSuccess (['../models-nonbsd/USD/usda/translated-cube.usda']));
