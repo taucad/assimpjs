@@ -59,10 +59,7 @@ if (${EMSCRIPTEN})
     # Advanced performance optimizations  
     set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -funroll-loops")
     set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -finline-functions")
-    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -ffast-math")
     set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -fomit-frame-pointer")
-    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -march=native")
-    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -mtune=native")
 
     # Copy all C++ flags to C flags (after all flags are set)
     set(CMAKE_C_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER}")
