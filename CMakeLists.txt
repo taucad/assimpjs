@@ -39,7 +39,7 @@ set (ASSIMP_BUILD_IRRMESH_IMPORTER OFF CACHE BOOL "")
 set (ASSIMP_BUILD_TERRAGEN_IMPORTER OFF CACHE BOOL "")
 
 # this dramatically decreases the wasm file size
-set (ASSIMP_BUILD_IFC_IMPORTER OFF CACHE BOOL "")
+set (ASSIMP_BUILD_IFC_IMPORTER ON CACHE BOOL "")
 
 # enable USD importer with optimized tinyusdz using proven EMSCRIPTEN config
 set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
