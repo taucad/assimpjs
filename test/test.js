@@ -319,7 +319,9 @@ it ('HMP', function () {
 });
 
 it ('IFC', function () {
-	assert (IsSuccess (['IFC/AC14-FZK-Haus.ifc']));
+	assert (IsError (['IFC/AC14-FZK-Haus.ifc']));
+  assert (IsError (['IFC/cube-blender-ifc4.ifc'])); // IFC4 not supported
+  assert (IsError (['IFC/cube-freecad-ifc4.ifc'])); // IFC4 not supported
 });
 
 it ('IQM', function () {

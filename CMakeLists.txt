@@ -38,10 +38,13 @@ set (ASSIMP_BUILD_IRRMESH_IMPORTER OFF CACHE BOOL "")
 # doesn't work
 set (ASSIMP_BUILD_TERRAGEN_IMPORTER OFF CACHE BOOL "")
 
-# this dramatically decreases the wasm file size
-set (ASSIMP_BUILD_IFC_IMPORTER ON CACHE BOOL "")
+# this dramatically decreases the wasm file size.
+# also, the IFX loader has limited IFC schema support.
+# upstream assimp should migrate to a 3rd party library for IFC to maximize compatibility.
+# See https://github.com/assimp/assimp/issues/6097 for tracking IFC support in assimp.
+set (ASSIMP_BUILD_IFC_IMPORTER OFF CACHE BOOL "")
 
-# enable USD importer with optimized tinyusdz using proven EMSCRIPTEN config
+# enable USD importer via tinyusdz
 set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
 
 if (${EMSCRIPTEN})
