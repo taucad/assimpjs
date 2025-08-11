@@ -318,10 +318,10 @@ it ('HMP', function () {
 	assert (IsSuccess (['HMP/terrain.hmp']));
 });
 
-it ('IFC', function () {
-	assert (IsError (['IFC/AC14-FZK-Haus.ifc']));
-  assert (IsError (['IFC/cube-blender-ifc4.ifc'])); // IFC4 not supported
-  assert (IsError (['IFC/cube-freecad-ifc4.ifc'])); // IFC4 not supported
+it.only ('IFC', function () {
+	assert (IsSuccess (['IFC/AC14-FZK-Haus.ifc']));
+  assert (IsSuccess (['IFC/cube-blender-ifc4.ifc']));
+  assert (IsSuccess (['IFC/cube-freecad-ifc4.ifc']));
 });
 
 it ('IQM', function () {
