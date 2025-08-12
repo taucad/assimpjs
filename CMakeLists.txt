@@ -38,20 +38,17 @@ set (ASSIMP_BUILD_IRRMESH_IMPORTER OFF CACHE BOOL "")
 # doesn't work
 set (ASSIMP_BUILD_TERRAGEN_IMPORTER OFF CACHE BOOL "")
 
-# this dramatically decreases the wasm file size.
-# also, the IFX loader has limited IFC schema support.
-# upstream assimp should migrate to a 3rd party library for IFC to maximize compatibility.
-# See https://github.com/assimp/assimp/issues/6097 for tracking IFC support in assimp.
+# without IFC, decreases the wasm file size by 900kb
 set (ASSIMP_BUILD_IFC_IMPORTER ON CACHE BOOL "")
 
-# enable USD importer via tinyusdz
+# without USD, decreases the wasm file size by 5.5mb
 set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
 
 if (${EMSCRIPTEN})
   # Web-optimized: Smallest size for web deployment
   if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_CXX_FLAGS_RELEASE "-Oz -DNDEBUG -flto")
-    set(CMAKE_C_FLAGS_RELEASE "-Oz -DNDEBUG -flto")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -flto")
+    set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -flto")
   endif()
 
   # Server-optimized: Maximum performance for server deployment
