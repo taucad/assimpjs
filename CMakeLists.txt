@@ -27,16 +27,16 @@ set (ASSIMP_BUILD_M3D_IMPORTER OFF CACHE BOOL "")
 # assertion failed because of a memory error
 set (ASSIMP_BUILD_RAW_IMPORTER OFF CACHE BOOL "")
 
-# removed from assimp, so doesn't need to compile at all
-# https://github.com/assimp/assimp/issues/3647
-set (ASSIMP_BUILD_X3D_IMPORTER OFF CACHE BOOL "")
-
 # doesn't work because of xml parsing error
 set (ASSIMP_BUILD_IRR_IMPORTER OFF CACHE BOOL "")
 set (ASSIMP_BUILD_IRRMESH_IMPORTER OFF CACHE BOOL "")
 
 # doesn't work
 set (ASSIMP_BUILD_TERRAGEN_IMPORTER OFF CACHE BOOL "")
+
+# without X3D, decreases the wasm file size by 1.5mb
+set (ASSIMP_BUILD_X3D_IMPORTER ON CACHE BOOL "")
+set (ASSIMP_BUILD_VRML_IMPORTER ON CACHE BOOL "")
 
 # without IFC, decreases the wasm file size by 900kb
 set (ASSIMP_BUILD_IFC_IMPORTER ON CACHE BOOL "")

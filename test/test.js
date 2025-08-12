@@ -31,16 +31,60 @@ function LoadModel (files)
 	return ajs.ConvertFileList (fileList, 'assjson');
 }
 
+/**
+ * Returns `true` if the file:
+ * - is not importable
+ * - is importable but produces no meshes
+ * 
+ * Otherwise, returns `false`
+ * 
+ * @param {string[]} files
+ * @returns {boolean}
+ */
 function IsError (files)
 {
 	let result = LoadModel (files);
-	return !result.IsSuccess ();
+	if (!result.IsSuccess ()) {
+		return true; // Import failed
+	}
+	
+	// Check if file loaded but produced no meshes (also considered an error)
+	let jsonFile = result.GetFile (0);
+	let jsonString = new TextDecoder ().decode (jsonFile.GetContent ());
+	let scene = JSON.parse (jsonString);
+	return !scene.meshes || scene.meshes.length === 0;
 }
 
-function IsSuccess (files)
+/**
+ * Returns `true` if the file:
+ * - is importable
+ * - is importable and produces meshes (unless allowNoMeshes is true)
+ * 
+ * Otherwise, returns `false`
+ * 
+ * @param {string[]} files
+ * @param {boolean} [allowNoMeshes=false]
+ * @returns {boolean}
+ */
+function IsSuccess (files, allowNoMeshes = false)
 {
 	let result = LoadModel (files);
-	return result.IsSuccess ();
+	if (!result.IsSuccess ()) {
+		return false;
+	}
+	
+	// If we allow files without meshes, just check that it imported successfully
+	if (allowNoMeshes) {
+		return true;
+	}
+	
+	// Get the assjson content and parse it
+	let jsonFile = result.GetFile (0);
+	let jsonString = new TextDecoder ().decode (jsonFile.GetContent ());
+	let scene = JSON.parse (jsonString);
+	
+	// Check that the scene has at least one mesh
+	return scene.meshes && scene.meshes.length > 0;
 }
 
 describe ('Importer', function () {
@@ -383,8 +427,8 @@ it ('LWS', function () {
 it ('M3D', function () {
 	// M3D importer is disabled
 	assert (IsError (['M3D/cube_usemtl.m3d']));
-	assert (IsSuccess (['M3D/cube_normals.m3d'])); // It's unclear why this is successful
-	assert (IsSuccess (['M3D/cube_with_vertexcolors.m3d'])); // It's unclear why this is successful
+	assert (IsError (['M3D/cube_normals.m3d'])); // It's unclear why this is successful
+	assert (IsError (['M3D/cube_with_vertexcolors.m3d'])); // It's unclear why this is successful
 	assert (IsError (['M3D/cube_with_vertexcolors.a3d']));
 	assert (IsError (['M3D/suzanne.m3d']));
 	assert (IsError (['M3D/WusonBlitz0.m3d']));
@@ -458,7 +502,7 @@ it ('OBJ', function () {
 	assert (IsSuccess (['OBJ/box.obj']));
 	assert (IsSuccess (['OBJ/box_longline.obj']));
 	assert (IsSuccess (['OBJ/box_mat_with_spaces.obj']));
-	assert (IsSuccess (['OBJ/box_UTF16BE.obj']));
+	assert (IsSuccess (['OBJ/box_UTF16BE.obj'], true));
 	assert (IsSuccess (['OBJ/box_without_lineending.obj']));
 	assert (IsSuccess (['OBJ/spider.obj']));
 	assert (IsSuccess (['OBJ/cube_usemtl.obj']));
@@ -492,7 +536,7 @@ it ('OpenGEX', function () {
 	// assert (IsSuccess (['OpenGEX/animation_example.ogex'])); // DEBUG THIS
 	assert (IsSuccess (['OpenGEX/collada.ogex']));
 	// assert (IsSuccess (['OpenGEX/empty_camera.ogex'])); // DEBUG THIS
-	assert (IsSuccess (['OpenGEX/light_issue1262.ogex']));
+	assert (IsSuccess (['OpenGEX/light_issue1262.ogex'], true));
 });
 
 it ('PLY', function () {
@@ -562,21 +606,19 @@ it ('X', function () {
 });
 
 it ('X3D', function () {
-	// X3D importer is disabled
-	assert (IsError (['X3D/ComputerKeyboard.x3d']));
-	assert (IsError (['X3D/HelloWorld.x3d']));
-	assert (IsError (['X3D/HelloX3dTrademark.x3d']));
-	assert (IsError (['X3D/IndexedLineSet.x3d']));
-});
-
-it ('X3DB', function () {
-	// X3DB (X3D) importer is disabled
+	assert (IsSuccess (['X3D/ComputerKeyboard.x3d']));
+	assert (IsSuccess (['X3D/HelloWorld.x3d']));
+	assert (IsSuccess (['X3D/HelloX3dTrademark.x3d']));
+	assert (IsSuccess (['X3D/IndexedLineSet.x3d']));
+  
+	// X3DB (binary X3D) format is not currently supported
 	assert (IsError (['X3DB/HelloWorld.x3db']));
-});
 
-it ('X3DV', function () {
-	// X3DV (X3D) importer is disabled  
-	assert (IsError (['X3DV/HelloWorld.x3dv']));
+	assert (IsSuccess (['X3DV/HelloWorld.x3dv', 'X3DV/earth-topo.png']));
+
+	assert (IsSuccess (['WRL/HelloWorld.wrl', 'WRL/earth-topo.png']));
+	assert (IsSuccess (['WRL/MotionCaptureROM.WRL']));
+	assert (IsSuccess (['WRL/Wuson.wrl']));
 });
 
 it ('XGL', function () {
@@ -597,12 +639,5 @@ it ('USD', function () {
 	assert (IsSuccess (['../models-nonbsd/USD/usdc/translated-cube.usdc']));
 	assert (IsSuccess (['../models-nonbsd/USD/usdc/blendshape.usdc']));
 	assert (IsSuccess (['../models-nonbsd/USD/usdc/suzanne.usdc']));
-});
-
-it ('WRL', function () {
-  // WRL (X3D) importer is disabled
-	assert (IsError (['WRL/HelloWorld.wrl']));
-	assert (IsError (['WRL/MotionCaptureROM.WRL']));
-	assert (IsError (['WRL/Wuson.wrl']));
 });
 });
