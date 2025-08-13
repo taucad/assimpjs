@@ -106,7 +106,6 @@ if (${EMSCRIPTEN})
 	
   # Remove unnecessary runtime features (keeping safe ones)
 	target_link_options (AssimpJS PUBLIC -sSUPPORT_LONGJMP=0)
-	target_link_options (AssimpJS PUBLIC -sSUPPORT_ERRNO=0)
 	target_link_options (AssimpJS PUBLIC -sNO_EXIT_RUNTIME=1)       # Don't include exit handling
 	
 	# Essential flags for compatibility
