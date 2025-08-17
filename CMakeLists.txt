@@ -101,8 +101,9 @@ if (${EMSCRIPTEN})
 	# Javascript size optimizations
 	target_link_options (AssimpJS PUBLIC --closure=1)               # Google Closure Compiler optimization
 	
-	# Dynamic memory management for variable file sizes
-	target_link_options (AssimpJS PUBLIC -sALLOW_MEMORY_GROWTH=1 --no-heap-copy)   # Allow unlimited memory growth as needed
+	# Dynamic memory management for variable file sizes with increased stack for large IFC files
+	target_link_options (AssimpJS PUBLIC -sALLOW_MEMORY_GROWTH=1)   # Allow unlimited memory growth as needed
+	target_link_options (AssimpJS PUBLIC -sSTACK_SIZE=8MB)       # Increase stack size to 8MB for large IFC files
 	
   # Remove unnecessary runtime features (keeping safe ones)
 	target_link_options (AssimpJS PUBLIC -sSUPPORT_LONGJMP=0)

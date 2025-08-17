@@ -368,7 +368,7 @@ it ('IFC', function () {
   assert (IsSuccess (['IFC/cube-freecad-IFC4.ifc']));
   assert (IsSuccess (['IFC/Building-Architecture-IFC4X3_ADD2.ifc']));
   assert (IsSuccess (['IFC/dental_clinic.ifc']));
-  // assert (IsSuccess (['IFC/C20-Institute-Var-2.ifc'])); // Debug, fails with memory access error
+  assert (IsSuccess (['IFC/C20-Institute-Var-2.ifc'])); // Debug, fails with memory access error
 });
 
 it ('IQM', function () {
