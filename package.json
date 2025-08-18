@@ -3,7 +3,7 @@
 	"version": "0.0.11",
 	"description": "Javascript interface for the assimp library.",
 	"license": "MIT",
-	"main": "./dist/assimpjs.js",
+	"main": "./dist/assimpjs-mini.js",
 	"repository": "github:kovacsv/assimpjs",
 	"keywords": [
 		"assimp",
@@ -11,13 +11,33 @@
 		"model",
 		"converter"
 	],
+
+	"exports": {
+		".": {
+			"import": "./dist/assimpjs-mini.js",
+			"require": "./dist/assimpjs-mini.js",
+			"default": "./dist/assimpjs-mini.js"
+		},
+		"./all": {
+			"import": "./dist/assimpjs-all.js",
+			"require": "./dist/assimpjs-all.js",
+			"default": "./dist/assimpjs-all.js"
+		}
+	},
+	"files": [
+		"dist/**/*",
+		"LICENSE.md",
+		"README.md"
+	],
 	"devDependencies": {
 		"http-server": "^0.12.3",
 		"mocha": "^8.3.2"
 	},
 	"scripts": {
 		"start": "http-server",
-		"test": "mocha test --timeout 30000"
+		"test": "mocha test --timeout 30000",
+		"build": "tools/build_wasm_deb.sh ReleaseMini",
+		"build:all": "tools/build_wasm_deb.sh both"
 	},
 	"dependencies": {}
 }

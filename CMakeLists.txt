@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.6)
 set_property (GLOBAL PROPERTY USE_FOLDERS ON)
 
 set (CMAKE_SUPPRESS_REGENERATION 1)
-set (CMAKE_CONFIGURATION_TYPES Debug;Release;Release-Server;RelWithDebInfo;MinSizeRel)
+set (CMAKE_CONFIGURATION_TYPES Debug;ReleaseMini;ReleaseAll;RelWithDebInfo;MinSizeRel)
 
 add_definitions (-DUNICODE -D_UNICODE)
 
@@ -34,36 +34,27 @@ set (ASSIMP_BUILD_IRRMESH_IMPORTER OFF CACHE BOOL "")
 # doesn't work
 set (ASSIMP_BUILD_TERRAGEN_IMPORTER OFF CACHE BOOL "")
 
-# without X3D, decreases the wasm file size by 1.5mb
-set (ASSIMP_BUILD_X3D_IMPORTER ON CACHE BOOL "")
-set (ASSIMP_BUILD_VRML_IMPORTER ON CACHE BOOL "")
+if (CMAKE_BUILD_TYPE STREQUAL "ReleaseMini")
+  # without X3D, decreases the wasm file size by 1.5mb
+  set (ASSIMP_BUILD_X3D_IMPORTER OFF CACHE BOOL "" FORCE)
+  set (ASSIMP_BUILD_VRML_IMPORTER OFF CACHE BOOL "" FORCE)
 
-# without IFC, decreases the wasm file size by 900kb
-set (ASSIMP_BUILD_IFC_IMPORTER ON CACHE BOOL "")
+  # without IFC, decreases the wasm file size by 900kb
+  set (ASSIMP_BUILD_IFC_IMPORTER OFF CACHE BOOL "" FORCE)
 
-# without USD, decreases the wasm file size by 5.5mb
-set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
+  # without USD, decreases the wasm file size by 5.5mb
+  set (ASSIMP_BUILD_USD_IMPORTER OFF CACHE BOOL "" FORCE)
+elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseAll")
+  set (ASSIMP_BUILD_X3D_IMPORTER ON CACHE BOOL "" FORCE)
+  set (ASSIMP_BUILD_VRML_IMPORTER ON CACHE BOOL "" FORCE)
+  set (ASSIMP_BUILD_IFC_IMPORTER ON CACHE BOOL "" FORCE)
+  set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "" FORCE)
+endif()
 
 if (${EMSCRIPTEN})
-  # Web-optimized: Smallest size for web deployment
-  if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -flto")
-    set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -flto")
-  endif()
-
-  # Server-optimized: Maximum performance for server deployment
-  if (CMAKE_BUILD_TYPE STREQUAL "Release-Server")
-    # Core performance flags
-    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "-O3 -DNDEBUG -flto")
-    
-    # Advanced performance optimizations  
-    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -funroll-loops")
-    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -finline-functions")
-    set(CMAKE_CXX_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER} -fomit-frame-pointer")
-
-    # Copy all C++ flags to C flags (after all flags are set)
-    set(CMAKE_C_FLAGS_RELEASE_SERVER "${CMAKE_CXX_FLAGS_RELEASE_SERVER}")
-  endif()
+  # Set global flags so assimp library gets optimized
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG -flto -funroll-loops -finline-functions -fomit-frame-pointer")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -flto -funroll-loops -finline-functions -fomit-frame-pointer")
 endif()
 
 # build zlib from sources instead of looking for system zlib
@@ -89,6 +80,9 @@ if (${EMSCRIPTEN})
 	add_executable (AssimpJS ${AssimpJSSourceFiles})
 	target_compile_options (AssimpJS PUBLIC "$<$<CONFIG:Debug>:-gsource-map>")
 	target_compile_options (AssimpJS PUBLIC -fexceptions)
+
+  # LTO for linking - AssimpJS target only
+  target_link_options(AssimpJS PRIVATE -flto)
 
 	target_link_options (AssimpJS PUBLIC -sMODULARIZE=1)
 	target_link_options (AssimpJS PUBLIC -sEXPORT_NAME=assimpjs)
@@ -120,7 +114,11 @@ else ()
 endif ()
 
 target_link_libraries (AssimpJS assimp)
-set_target_properties(AssimpJS PROPERTIES OUTPUT_NAME assimpjs)
+if (CMAKE_BUILD_TYPE STREQUAL "ReleaseMini")
+  set_target_properties(AssimpJS PROPERTIES OUTPUT_NAME assimpjs-mini)
+elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseAll")
+  set_target_properties(AssimpJS PROPERTIES OUTPUT_NAME assimpjs-all)
+endif()
 set_target_properties (AssimpJS PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
 
 # AssimpJSTest

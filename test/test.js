@@ -1,19 +1,48 @@
-var fs = require ('fs');
-var path = require ('path');
-var assert = require ('assert');
+const fs = require ('fs');
+const path = require ('path');
+const assert = require ('assert');
 
-var config = 'Release'
+let config = 'Release'
 if (process.env.TEST_CONFIG !== undefined) {
 	config = process.env.TEST_CONFIG;
 }
-var assimpjs = require ('../build_wasm/' + config + '/assimpjs.js')();
 
-var ajs = null;
+// Load AssimpJS builds  
+// Check which builds are available and load accordingly
+let assimpjsMini;
+let assimpjsAll;
+
+// Try to load mini build (from default build directory)
+const miniBuildPath = path.join(__dirname, '../build_wasm/' + config + 'Mini/assimpjs-mini.js');
+if (fs.existsSync(miniBuildPath)) {
+    assimpjsMini = require(miniBuildPath)();
+}
+
+// Try to load all build (only available when building all variants)
+const allBuildPath = path.join(__dirname, '../build_wasm/' + config + 'All/assimpjs-all.js');
+if (fs.existsSync(allBuildPath)) {
+    assimpjsAll = require(allBuildPath)();
+}
+
+let ajsMini = null;
+let ajsAll = null;
+
 before (async function () {
-	if (ajs !== null) {
-		return;
+	console.log('Loading AssimpJS build variants...');
+	
+	if (assimpjsMini && ajsMini === null) {
+		ajsMini = await assimpjsMini;
+		console.log('✓ Mini build loaded');
 	}
-	ajs = await assimpjs;
+	
+	if (assimpjsAll && ajsAll === null) {
+		ajsAll = await assimpjsAll;
+		console.log('✓ All build loaded');
+	}
+	
+	if (!ajsMini) {
+		throw new Error('No mini build found. Expected build at build_wasm/' + config + '-Mini/');
+	}
 });
 
 function GetTestFileLocation (fileName)
@@ -21,14 +50,14 @@ function GetTestFileLocation (fileName)
 	return path.join (__dirname, '../assimp/test/models/' + fileName);
 }
 
-function LoadModel (files)
+function LoadModel (files, assimpInstance = ajsMini)
 {
-	let fileList = new ajs.FileList ();
+	let fileList = new assimpInstance.FileList ();
 	for (let i = 0; i < files.length; i++) {
 		let filePath = GetTestFileLocation (files[i]);
 		fileList.AddFile (filePath, fs.readFileSync (filePath))
 	}
-	return ajs.ConvertFileList (fileList, 'assjson');
+	return assimpInstance.ConvertFileList (fileList, 'assjson');
 }
 
 /**
@@ -39,11 +68,12 @@ function LoadModel (files)
  * Otherwise, returns `false`
  * 
  * @param {string[]} files
+ * @param {object} [assimpInstance=ajs] - Which AssimpJS instance to use
  * @returns {boolean}
  */
-function IsError (files)
+function IsError (files, assimpInstance = ajsMini)
 {
-	let result = LoadModel (files);
+	let result = LoadModel (files, assimpInstance);
 	if (!result.IsSuccess ()) {
 		return true; // Import failed
 	}
@@ -64,11 +94,12 @@ function IsError (files)
  * 
  * @param {string[]} files
  * @param {boolean} [allowNoMeshes=false]
+ * @param {object} [assimpInstance=ajs] - Which AssimpJS instance to use
  * @returns {boolean}
  */
-function IsSuccess (files, allowNoMeshes = false)
+function IsSuccess (files, allowNoMeshes = false, assimpInstance = ajsMini)
 {
-	let result = LoadModel (files);
+	let result = LoadModel (files, assimpInstance);
 	if (!result.IsSuccess ()) {
 		return false;
 	}
@@ -103,7 +134,7 @@ it ('Independent order', function () {
 });
 
 it ('Delay load', function () {
-	let result = ajs.ConvertFile (
+	let result = ajsMini.ConvertFile (
 		'OBJ/cube_usemtl.obj',
 		'assjson',
 		fs.readFileSync (GetTestFileLocation ('OBJ/cube_usemtl.obj')),
@@ -124,20 +155,20 @@ it ('Delay load', function () {
 
 it ('glTF export', function () {
 	let files = ['OBJ/cube_usemtl.obj', 'OBJ/cube_usemtl.mtl'];
-	let fileList = new ajs.FileList ();
+	let fileList = new ajsMini.FileList ();
 	for (let i = 0; i < files.length; i++) {
 		let filePath = GetTestFileLocation (files[i]);
 		fileList.AddFile (filePath, fs.readFileSync (filePath))
 	}
 	{
-		let result = ajs.ConvertFileList (fileList, 'gltf2');
+		let result = ajsMini.ConvertFileList (fileList, 'gltf2');
 		assert (result.IsSuccess ());
 		assert.equal (result.FileCount (), 2);
 		assert.equal (result.GetFile (0).GetPath (), 'result.gltf');
 		assert.equal (result.GetFile (1).GetPath (), 'result.bin');
 	}
 	{
-		let result = ajs.ConvertFileList (fileList, 'glb2');
+		let result = ajsMini.ConvertFileList (fileList, 'glb2');
 		assert (result.IsSuccess ());
 		assert.equal (result.FileCount (), 1);
 		assert.equal (result.GetFile (0).GetPath (), 'result.glb');
@@ -363,12 +394,21 @@ it ('HMP', function () {
 });
 
 it ('IFC', function () {
-	assert (IsSuccess (['IFC/AC14-FZK-Haus-IFC2X3.ifc']));
-  assert (IsSuccess (['IFC/cube-blender-IFC4.ifc']));
-  assert (IsSuccess (['IFC/cube-freecad-IFC4.ifc']));
-  assert (IsSuccess (['IFC/Building-Architecture-IFC4X3_ADD2.ifc']));
-  assert (IsSuccess (['IFC/dental_clinic.ifc']));
-  assert (IsSuccess (['IFC/C20-Institute-Var-2.ifc'])); // Debug, fails with memory access error
+	if (!ajsAll) {
+		// If all build isn't available, these should error (same as mini build)
+		assert (IsError (['IFC/AC14-FZK-Haus-IFC2X3.ifc']));
+		assert (IsError (['IFC/cube-blender-IFC4.ifc']));
+	}
+  
+  if (ajsAll) {
+		// IFC importer should be enabled in all build
+		assert (IsSuccess (['IFC/AC14-FZK-Haus-IFC2X3.ifc'], false, ajsAll));
+		assert (IsSuccess (['IFC/cube-blender-IFC4.ifc'], false, ajsAll));
+		assert (IsSuccess (['IFC/cube-freecad-IFC4.ifc'], false, ajsAll));
+		assert (IsSuccess (['IFC/Building-Architecture-IFC4X3_ADD2.ifc'], false, ajsAll));
+		assert (IsSuccess (['IFC/dental_clinic.ifc'], false, ajsAll));
+		assert (IsSuccess (['IFC/C20-Institute-Var-2.ifc'], false, ajsAll)); // Previously failed with memory access error
+	}
 });
 
 it ('IQM', function () {
@@ -608,20 +648,29 @@ it ('X', function () {
 });
 
 it ('X3D', function () {
-	assert (IsSuccess (['X3D/ComputerKeyboard.x3d']));
-	assert (IsSuccess (['X3D/HelloWorld.x3d']));
-	assert (IsSuccess (['X3D/HelloX3dTrademark.x3d']));
-	assert (IsSuccess (['X3D/IndexedLineSet.x3d']));
-  
-	// X3DB (binary X3D) format is not currently supported
+	if (!ajsAll) {
+		// If all build isn't available, these should error (same as mini build)
+		assert (IsError (['X3D/ComputerKeyboard.x3d']));
+		assert (IsError (['X3D/HelloWorld.x3d']));
+	} else {
+		// X3D importer should be enabled in all build
+		assert (IsSuccess (['X3D/ComputerKeyboard.x3d'], false, ajsAll));
+		assert (IsSuccess (['X3D/HelloWorld.x3d'], false, ajsAll));
+		assert (IsSuccess (['X3D/HelloX3dTrademark.x3d'], false, ajsAll));
+		assert (IsSuccess (['X3D/IndexedLineSet.x3d'], false, ajsAll));
+
+		assert (IsSuccess (['X3DV/HelloWorld.x3dv', 'X3DV/earth-topo.png'], false, ajsAll));
+
+		// VRML support (part of X3D family)
+		assert (IsSuccess (['WRL/HelloWorld.wrl', 'WRL/earth-topo.png'], false, ajsAll));
+		assert (IsSuccess (['WRL/MotionCaptureROM.WRL'], false, ajsAll));
+		assert (IsSuccess (['WRL/Wuson.wrl'], false, ajsAll));
+	}
+	
+	// X3DB (binary X3D) format is not currently supported in any build
 	assert (IsError (['X3DB/HelloWorld.x3db']));
-
-	assert (IsSuccess (['X3DV/HelloWorld.x3dv', 'X3DV/earth-topo.png']));
-
-	assert (IsSuccess (['WRL/HelloWorld.wrl', 'WRL/earth-topo.png']));
-	assert (IsSuccess (['WRL/MotionCaptureROM.WRL']));
-	assert (IsSuccess (['WRL/Wuson.wrl']));
 });
+
 
 it ('XGL', function () {
 	assert (IsSuccess (['XGL/cubes_with_alpha.zgl']));
@@ -630,16 +679,23 @@ it ('XGL', function () {
 });
 
 it ('USD', function () {
-	// Note: USD files are in models-nonbsd directory
-	assert (IsSuccess (['../models-nonbsd/USD/usda/texturedcube.usda']));
-	assert (IsSuccess (['../models-nonbsd/USD/usda/translated-cube.usda']));
-	assert (IsSuccess (['../models-nonbsd/USD/usda/blendshape.usda']));
-	assert (IsSuccess (['../models-nonbsd/USD/usda/simple-skin-test.usda']));
-	assert (IsSuccess (['../models-nonbsd/USD/usda/simple-skin-animation-test.usda']));
-	
-	assert (IsSuccess (['../models-nonbsd/USD/usdc/texturedcube.usdc']));
-	assert (IsSuccess (['../models-nonbsd/USD/usdc/translated-cube.usdc']));
-	assert (IsSuccess (['../models-nonbsd/USD/usdc/blendshape.usdc']));
-	assert (IsSuccess (['../models-nonbsd/USD/usdc/suzanne.usdc']));
+	if (!ajsAll) {
+		// If all build isn't available, these should error (same as mini build)
+		assert (IsError (['../models-nonbsd/USD/usda/texturedcube.usda']));
+		assert (IsError (['../models-nonbsd/USD/usdc/texturedcube.usdc']));
+	} else {
+		// USD importer should be enabled in all build
+		// Note: USD files are in models-nonbsd directory
+		assert (IsSuccess (['../models-nonbsd/USD/usda/texturedcube.usda'], false, ajsAll));
+		assert (IsSuccess (['../models-nonbsd/USD/usda/translated-cube.usda'], false, ajsAll));
+		assert (IsSuccess (['../models-nonbsd/USD/usda/blendshape.usda'], false, ajsAll));
+		assert (IsSuccess (['../models-nonbsd/USD/usda/simple-skin-test.usda'], false, ajsAll));
+		assert (IsSuccess (['../models-nonbsd/USD/usda/simple-skin-animation-test.usda'], false, ajsAll));
+		
+		assert (IsSuccess (['../models-nonbsd/USD/usdc/texturedcube.usdc'], false, ajsAll));
+		assert (IsSuccess (['../models-nonbsd/USD/usdc/translated-cube.usdc'], false, ajsAll));
+		assert (IsSuccess (['../models-nonbsd/USD/usdc/blendshape.usdc'], false, ajsAll));
+		assert (IsSuccess (['../models-nonbsd/USD/usdc/suzanne.usdc'], false, ajsAll));
+	}
 });
 });
