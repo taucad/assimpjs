@@ -671,7 +671,6 @@ it ('X3D', function () {
 	assert (IsError (['X3DB/HelloWorld.x3db']));
 });
 
-
 it ('XGL', function () {
 	assert (IsSuccess (['XGL/cubes_with_alpha.zgl']));
 	assert (IsSuccess (['XGL/sample_official.xgl']));
