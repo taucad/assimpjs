@@ -469,8 +469,8 @@ it ('LWS', function () {
 it ('M3D', function () {
 	// M3D importer is disabled
 	assert (IsError (['M3D/cube_usemtl.m3d']));
-	assert (IsError (['M3D/cube_normals.m3d'])); // It's unclear why this is successful
-	assert (IsError (['M3D/cube_with_vertexcolors.m3d'])); // It's unclear why this is successful
+	assert (IsError (['M3D/cube_normals.m3d']));
+	assert (IsError (['M3D/cube_with_vertexcolors.m3d']));
 	assert (IsError (['M3D/cube_with_vertexcolors.a3d']));
 	assert (IsError (['M3D/suzanne.m3d']));
 	assert (IsError (['M3D/WusonBlitz0.m3d']));
