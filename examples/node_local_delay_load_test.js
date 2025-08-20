@@ -1,5 +1,5 @@
 let fs = require ('fs');
-const assimpjs = require ('../dist/assimpjs.js')();
+const assimpjs = require ('../dist/assimpjs-all.js')();
 
 assimpjs.then ((ajs) => {
     // convert model
