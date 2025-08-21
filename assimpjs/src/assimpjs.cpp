@@ -32,6 +32,34 @@ static std::string GetFileNameFromFormat (const std::string& format)
 		fileName += ".gltf";
 	} else if (format == "glb" || format == "glb2") {
 		fileName += ".glb";
+	} else if (format == "obj") {
+		fileName += ".obj";
+	} else if (format == "ply") {
+		fileName += ".ply";
+	} else if (format == "stl") {
+		fileName += ".stl";
+	} else if (format == "fbx") {
+		fileName += ".fbx";
+	} else if (format == "collada" || format == "dae") {
+		fileName += ".dae";
+	} else if (format == "x") {
+		fileName += ".x";
+	} else if (format == "x3d") {
+		fileName += ".x3d";
+	} else if (format == "3mf") {
+		fileName += ".3mf";
+	} else if (format == "3ds") {
+		fileName += ".3ds";
+	} else if (format == "stp" || format == "step") {
+		fileName += ".stp";
+	} else if (format == "m3d") {
+		fileName += ".m3d";
+	} else if (format == "ogex") {
+		fileName += ".ogex";
+	} else if (format == "assbin") {
+		fileName += ".assbin";
+	} else if (format == "assxml") {
+		fileName += ".assxml";
 	}
 	return fileName;
 }

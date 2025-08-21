@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.6)
 set_property (GLOBAL PROPERTY USE_FOLDERS ON)
 
 set (CMAKE_SUPPRESS_REGENERATION 1)
-set (CMAKE_CONFIGURATION_TYPES Debug;ReleaseMini;ReleaseAll;RelWithDebInfo;MinSizeRel)
+set (CMAKE_CONFIGURATION_TYPES Debug;ReleaseMini;ReleaseAll;ReleaseExporter;RelWithDebInfo;MinSizeRel)
 
 add_definitions (-DUNICODE -D_UNICODE)
 
@@ -14,41 +14,64 @@ project (AssimpJS)
 set (BUILD_SHARED_LIBS OFF CACHE BOOL "")
 set (ASSIMP_BUILD_TESTS OFF CACHE BOOL "")
 set (ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "")
-set (ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "")
 
-# Enable only essential exporters
-set (ASSIMP_BUILD_ASSJSON_EXPORTER ON CACHE BOOL "")
-set (ASSIMP_BUILD_GLTF_EXPORTER ON CACHE BOOL "")
+if (CMAKE_BUILD_TYPE STREQUAL "ReleaseMini" OR CMAKE_BUILD_TYPE STREQUAL "ReleaseAll")
+  # Enable all IMPORTERS by default, DISABLE all EXPORTERS by default
+  set (ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT ON CACHE BOOL "")
+  set (ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "")
 
-# undefined behaviour because of alignment issues, crashes and memory leaks
-# https://github.com/assimp/assimp/pull/4044
-set (ASSIMP_BUILD_M3D_IMPORTER OFF CACHE BOOL "")
+  # Enable only essential EXPORTERS for import-focused builds
+  set (ASSIMP_BUILD_ASSJSON_EXPORTER ON CACHE BOOL "")
+  set (ASSIMP_BUILD_GLTF_EXPORTER ON CACHE BOOL "")
 
-# assertion failed because of a memory error
-set (ASSIMP_BUILD_RAW_IMPORTER OFF CACHE BOOL "")
+  ### SKIPPED IMPORTERS ###
+  # M3D importer has undefined behaviour because of alignment issues, crashes and memory leaks
+  # https://github.com/assimp/assimp/pull/4044
+  set (ASSIMP_BUILD_M3D_IMPORTER OFF CACHE BOOL "")
 
-# doesn't work because of xml parsing error
-set (ASSIMP_BUILD_IRR_IMPORTER OFF CACHE BOOL "")
-set (ASSIMP_BUILD_IRRMESH_IMPORTER OFF CACHE BOOL "")
+  # Raw importer assertion failed because of a memory error
+  set (ASSIMP_BUILD_RAW_IMPORTER OFF CACHE BOOL "")
 
-# doesn't work
-set (ASSIMP_BUILD_TERRAGEN_IMPORTER OFF CACHE BOOL "")
+  # Irrlicht importer doesn't work because of xml parsing error
+  set (ASSIMP_BUILD_IRR_IMPORTER OFF CACHE BOOL "")
+  set (ASSIMP_BUILD_IRRMESH_IMPORTER OFF CACHE BOOL "")
+
+  # Terragen importer doesn't work
+  set (ASSIMP_BUILD_TERRAGEN_IMPORTER OFF CACHE BOOL "")
+  ### END SKIPPED IMPORTERS ###
+endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "ReleaseMini")
   # without X3D, decreases the wasm file size by 1.5mb
-  set (ASSIMP_BUILD_X3D_IMPORTER OFF CACHE BOOL "" FORCE)
-  set (ASSIMP_BUILD_VRML_IMPORTER OFF CACHE BOOL "" FORCE)
+  set (ASSIMP_BUILD_X3D_IMPORTER OFF CACHE BOOL "")
+  set (ASSIMP_BUILD_VRML_IMPORTER OFF CACHE BOOL "")
 
   # without IFC, decreases the wasm file size by 900kb
-  set (ASSIMP_BUILD_IFC_IMPORTER OFF CACHE BOOL "" FORCE)
+  set (ASSIMP_BUILD_IFC_IMPORTER OFF CACHE BOOL "")
 
   # without USD, decreases the wasm file size by 5.5mb
-  set (ASSIMP_BUILD_USD_IMPORTER OFF CACHE BOOL "" FORCE)
+  set (ASSIMP_BUILD_USD_IMPORTER OFF CACHE BOOL "")
 elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseAll")
-  set (ASSIMP_BUILD_X3D_IMPORTER ON CACHE BOOL "" FORCE)
-  set (ASSIMP_BUILD_VRML_IMPORTER ON CACHE BOOL "" FORCE)
-  set (ASSIMP_BUILD_IFC_IMPORTER ON CACHE BOOL "" FORCE)
-  set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "" FORCE)
+  set (ASSIMP_BUILD_X3D_IMPORTER ON CACHE BOOL "")
+  set (ASSIMP_BUILD_VRML_IMPORTER ON CACHE BOOL "")
+  set (ASSIMP_BUILD_IFC_IMPORTER ON CACHE BOOL "")
+  set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
+elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseExporter")
+  # ReleaseExporter: MINIMAL IMPORTERS support (GLTF/GLB/ASSJSON only) but ALL EXPORTERS enabled
+  
+  # Disable ALL IMPORTERS by default, then selectively enable only what we need
+  set (ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "")
+  set (ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT ON CACHE BOOL "")
+  
+  # Enable only essential IMPORTERS for GLTF/GLB input and ASSJSON conversion
+  set (ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "")    # For GLTF 1.0 & 2.0 + GLB support
+  set (ASSIMP_BUILD_ASSJSON_IMPORTER ON CACHE BOOL "") # For internal JSON conversion
+  
+  # Enable most EXPORTERS (excluding problematic ones)
+  set (ASSIMP_BUILD_PBRT_EXPORTER OFF CACHE BOOL "")  # Not required
+  set (ASSIMP_BUILD_M3D_EXPORTER OFF CACHE BOOL "")  # Disabled due memory leaks
+  set (ASSIMP_BUILD_ASSBIN_EXPORTER OFF CACHE BOOL "")  # Not a true file format
+  set (ASSIMP_BUILD_ASSXML_EXPORTER OFF CACHE BOOL "")  # Not a true file format
 endif()
 
 if (${EMSCRIPTEN})
@@ -118,6 +141,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "ReleaseMini")
   set_target_properties(AssimpJS PROPERTIES OUTPUT_NAME assimpjs-mini)
 elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseAll")
   set_target_properties(AssimpJS PROPERTIES OUTPUT_NAME assimpjs-all)
+elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseExporter")
+  set_target_properties(AssimpJS PROPERTIES OUTPUT_NAME assimpjs-exporter)
 endif()
 set_target_properties (AssimpJS PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
 

@@ -22,6 +22,11 @@
 			"import": "./dist/assimpjs-all.js",
 			"require": "./dist/assimpjs-all.js",
 			"default": "./dist/assimpjs-all.js"
+		},
+		"./exporter": {
+			"import": "./dist/assimpjs-exporter.js",
+			"require": "./dist/assimpjs-exporter.js",
+			"default": "./dist/assimpjs-exporter.js"
 		}
 	},
 	"files": [
@@ -36,8 +41,14 @@
 	"scripts": {
 		"start": "http-server",
 		"test": "mocha test --timeout 30000",
-		"build": "tools/build_wasm_deb.sh ReleaseMini",
-		"build:all": "tools/build_wasm_deb.sh both"
+		"build": "tools/build_wasm_deb.sh all",
+		"build:mini": "tools/build_wasm_deb.sh ReleaseMini",
+		"build:all": "tools/build_wasm_deb.sh ReleaseAll",
+		"build:exporter": "tools/build_wasm_deb.sh ReleaseExporter",
+		"clean": "tools/build_wasm_deb.sh clean",
+		"clean:mini": "tools/build_wasm_deb.sh clean-mini",
+		"clean:all": "tools/build_wasm_deb.sh clean-all",
+		"clean:exporter": "tools/build_wasm_deb.sh clean-exporter"
 	},
 	"dependencies": {}
 }

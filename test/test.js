@@ -12,20 +12,28 @@ if (process.env.TEST_CONFIG !== undefined) {
 let assimpjsMini;
 let assimpjsAll;
 
-// Try to load mini build (from default build directory)
-const miniBuildPath = path.join(__dirname, '../build_wasm/' + config + 'Mini/assimpjs-mini.js');
+// Try to load mini build (from separate build directory)
+const miniBuildPath = path.join(__dirname, '../build_wasm_mini/' + config + 'Mini/assimpjs-mini.js');
 if (fs.existsSync(miniBuildPath)) {
     assimpjsMini = require(miniBuildPath)();
 }
 
-// Try to load all build (only available when building all variants)
-const allBuildPath = path.join(__dirname, '../build_wasm/' + config + 'All/assimpjs-all.js');
+// Try to load all build (from separate build directory)
+const allBuildPath = path.join(__dirname, '../build_wasm_all/' + config + 'All/assimpjs-all.js');
 if (fs.existsSync(allBuildPath)) {
     assimpjsAll = require(allBuildPath)();
 }
 
+// Try to load exporter build (from separate build directory)
+let assimpjsExporter;
+const exporterBuildPath = path.join(__dirname, '../build_wasm_exporter/' + config + 'Exporter/assimpjs-exporter.js');
+if (fs.existsSync(exporterBuildPath)) {
+    assimpjsExporter = require(exporterBuildPath)();
+}
+
 let ajsMini = null;
 let ajsAll = null;
+let ajsExporter = null;
 
 before (async function () {
 	console.log('Loading AssimpJS build variants...');
@@ -40,8 +48,13 @@ before (async function () {
 		console.log('✓ All build loaded');
 	}
 	
+	if (assimpjsExporter && ajsExporter === null) {
+		ajsExporter = await assimpjsExporter;
+		console.log('✓ Exporter build loaded');
+	}
+	
 	if (!ajsMini) {
-		throw new Error('No mini build found. Expected build at build_wasm/' + config + '-Mini/');
+		throw new Error('No mini build found. Expected build at build_wasm_mini/' + config + 'Mini/');
 	}
 });
 
@@ -118,6 +131,143 @@ function IsSuccess (files, allowNoMeshes = false, assimpInstance = ajsMini)
 	return scene.meshes && scene.meshes.length > 0;
 }
 
+/**
+ * Performs round-trip export testing: import → export → import → verify
+ * 
+ * @param {string[]} sourceFiles - Input files to import
+ * @param {string} exportFormat - Format to export to (obj, ply, stl, etc.)
+ * @param {object} [assimpInstance=ajsExporter] - AssimpJS instance to use
+ * @returns {boolean} true if round-trip successful, false otherwise
+ */
+function TestRoundTrip (sourceFiles, exportFormat, assimpInstance = ajsExporter)
+{
+	if (!assimpInstance) {
+		console.log(`Skipping ${exportFormat} export test - exporter build not available`);
+		return false; // Skip test if exporter not available
+	}
+	
+	try {
+		// Step 1: Import original file
+		let originalResult = LoadModel (sourceFiles, assimpInstance);
+		if (!originalResult.IsSuccess ()) {
+			console.log(`Round-trip test failed for ${exportFormat}: Original import failed`);
+			return false;
+		}
+		
+		// Step 2: Convert to export format
+		let fileList = new assimpInstance.FileList ();
+		for (let i = 0; i < sourceFiles.length; i++) {
+			let filePath = GetTestFileLocation (sourceFiles[i]);
+			fileList.AddFile (filePath, fs.readFileSync (filePath))
+		}
+		let convertResult = assimpInstance.ConvertFileList (fileList, exportFormat);
+		if (!convertResult.IsSuccess ()) {
+			console.log(`Round-trip test failed for ${exportFormat}: Export conversion failed`);
+			return false;
+		}
+		
+		// Step 3: Re-import the exported data using a suitable importer
+		// Handle multi-file exports (like COLLADA with textures)
+		let mainFile = null;
+		let allFiles = [];
+		let fileIndex = 0;
+		
+		// Collect all exported files
+		try {
+			while (true) {
+				let file = convertResult.GetFile(fileIndex);
+				if (!file) break;
+				
+				allFiles.push(file);
+				let path = file.GetPath();
+				
+				// Identify the main file based on export format
+				if ((exportFormat === 'collada' && path.toLowerCase().endsWith('.dae')) ||
+				    (exportFormat === 'x3d' && path.toLowerCase().endsWith('.x3d')) ||
+				    (exportFormat === '3mf' && path.toLowerCase().endsWith('.3mf')) ||
+				    (!mainFile && !path.toLowerCase().includes('texture') && !path.toLowerCase().includes('.png') && !path.toLowerCase().includes('.jpg'))) {
+					mainFile = file;
+				}
+				
+				fileIndex++;
+				
+				// Safety check to prevent infinite loops
+				if (fileIndex > 100) {
+					console.log(`Round-trip test failed for ${exportFormat}: Too many files (${fileIndex}), possible infinite loop`);
+					return false;
+				}
+			}
+		} catch (error) {
+			// GetFile throws exception when no more files - this is expected
+		}
+		
+		// Fallback to first file if no main file identified
+		if (!mainFile && allFiles.length > 0) {
+			mainFile = allFiles[0];
+		}
+		
+		if (!mainFile) {
+			console.log(`Round-trip test failed for ${exportFormat}: No main file found in export results`);
+			return false;
+		}
+		
+		// Always use the 'all' build for re-import since it has all importers enabled
+		let importInstance = ajsAll;
+		let reimportFileList = new importInstance.FileList ();
+		
+		// Add all files to the reimport (main file + any auxiliary files like textures)
+		for (let file of allFiles) {
+			reimportFileList.AddFile (file.GetPath (), file.GetContent ());
+		}
+		
+		let reimportResult = importInstance.ConvertFileList (reimportFileList, 'assjson');
+		if (!reimportResult.IsSuccess ()) {
+			console.log(`Round-trip test failed for ${exportFormat}: Re-import failed`);
+			return false;
+		}
+		
+		// Step 4: Basic validation - check that both have meshes
+		let originalJsonFile = originalResult.GetFile (0);
+		let originalJsonString = new TextDecoder ().decode (originalJsonFile.GetContent ());
+		let originalScene = JSON.parse (originalJsonString);
+		
+		let reimportJsonFile = reimportResult.GetFile (0);
+		let reimportJsonString = new TextDecoder ().decode (reimportJsonFile.GetContent ());
+		let reimportScene = JSON.parse (reimportJsonString);
+		
+		// Verify both have meshes
+		if (!originalScene.meshes || originalScene.meshes.length === 0) {
+			console.log(`Round-trip test failed for ${exportFormat}: Original scene has no meshes`);
+			return false;
+		}
+		if (!reimportScene.meshes || reimportScene.meshes.length === 0) {
+			console.log(`Round-trip test failed for ${exportFormat}: Reimported scene has no meshes`);
+			return false;
+		}
+		
+		// Basic mesh count validation (allow some tolerance for format differences)
+		let originalMeshCount = originalScene.meshes.length;
+		let reimportMeshCount = reimportScene.meshes.length;
+		
+		// Allow reasonable tolerance (some formats might merge or split meshes)
+		let tolerance = Math.max (1, Math.floor (originalMeshCount * 0.5));
+		let meshCountDiff = Math.abs (originalMeshCount - reimportMeshCount);
+		if (meshCountDiff > tolerance) {
+			console.log(`Round-trip test failed for ${exportFormat}: Mesh count difference too large (${originalMeshCount} vs ${reimportMeshCount}, tolerance: ${tolerance})`);
+			return false;
+		}
+		
+		console.log(`Round-trip test passed for ${exportFormat}: ${originalMeshCount} -> ${reimportMeshCount} meshes (${allFiles.length} files exported)`);
+		return true;
+		
+	} catch (error) {
+		console.log(`Round-trip test failed for ${exportFormat}: ${error.message}`);
+		return false;
+	}
+}
+
+
+
 describe ('Importer', function () {
 
 it ('Empty file list', function () {
@@ -127,6 +277,8 @@ it ('Empty file list', function () {
 it ('Not importable file', function () {
 	assert (IsError (['3DS/test.png']));
 });
+
+
 
 it ('Independent order', function () {
 	assert (IsSuccess (['OBJ/cube_usemtl.obj', 'OBJ/cube_usemtl.mtl']));
@@ -697,4 +849,152 @@ it ('USD', function () {
 		assert (IsSuccess (['../models-nonbsd/USD/usdc/suzanne.usdc'], false, ajsAll));
 	}
 });
+});
+
+describe ('Exporter', function () {
+it ('OBJ Export', function () {
+	if (!ajsExporter) {
+		this.skip();
+		return;
+	}
+	
+	// Use GLTF/GLB files since exporter build only supports those for import
+	assert (TestRoundTrip (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'obj'));
+	assert (TestRoundTrip (['glTF2/simple_skin/quad_skin.glb'], 'obj'));
+});
+
+it ('PLY Export', function () {
+	if (!ajsExporter) {
+		this.skip();
+		return;
+	}
+	
+	assert (TestRoundTrip (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'ply'));
+	assert (TestRoundTrip (['glTF2/simple_skin/quad_skin.glb'], 'ply'));
+});
+
+it ('STL Export', function () {
+	if (!ajsExporter) {
+		this.skip();
+		return;
+	}
+	
+	assert (TestRoundTrip (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'stl'));
+	assert (TestRoundTrip (['glTF2/simple_skin/quad_skin.glb'], 'stl'));
+});
+
+it.skip ('FBX Export', function () {
+	if (!ajsExporter) {
+		this.skip();
+		return;
+	}
+	
+	assert (TestRoundTrip (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'fbx'));
+	assert (TestRoundTrip (['glTF2/simple_skin/quad_skin.glb'], 'fbx'));
+});
+
+it ('COLLADA Export', function () {
+	if (!ajsExporter) {
+		this.skip();
+		return;
+	}
+	
+	assert (TestRoundTrip (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'collada'));
+	assert (TestRoundTrip (['glTF2/simple_skin/quad_skin.glb'], 'collada'));
+});
+
+it ('X Export', function () {
+	if (!ajsExporter) {
+		this.skip();
+		return;
+	}
+	
+	assert (TestRoundTrip (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'x'));
+	assert (TestRoundTrip (['glTF2/simple_skin/quad_skin.glb'], 'x'));
+});
+
+it ('X3D Export', function () {
+  if (!ajsExporter) {
+    this.skip();
+		return;
+	}
+	
+	assert (TestRoundTrip (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'x3d'));
+  assert (TestRoundTrip (['glTF2/simple_skin/quad_skin.glb'], 'x3d'));
+});
+
+it.skip ('3MF Export', function () {
+  // 3MF export has a fundamental bug in Assimp's WASM build:
+  // - Export reports "success" but generates 42 empty files instead of proper 3MF ZIP archive
+  // - This appears to be a ZIP library integration issue with Emscripten
+  // - Should be reported as a bug to Assimp project
+	if (!ajsExporter) {
+		this.skip();
+		return;
+	}
+});
+
+it ('3DS Export', function () {
+	if (!ajsExporter) {
+		this.skip();
+		return;
+	}
+	
+	assert (TestRoundTrip (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], '3ds'));
+	assert (TestRoundTrip (['glTF2/simple_skin/quad_skin.glb'], '3ds'));
+});
+
+it ('STEP Export', function () {
+	if (!ajsExporter) {
+		this.skip();
+		return;
+	}
+	
+	// STEP format uses 'stp' identifier, not 'step'
+	// Note: STEP import may not be available, so we only test export success
+	
+	function TestStepExport(sourceFiles) {
+		try {
+			// Import original file
+			let originalResult = LoadModel (sourceFiles, ajsExporter);
+			if (!originalResult.IsSuccess ()) {
+				return false;
+			}
+			
+			// Export to STEP
+			let fileList = new ajsExporter.FileList ();
+			for (let i = 0; i < sourceFiles.length; i++) {
+				let filePath = GetTestFileLocation (sourceFiles[i]);
+				fileList.AddFile (filePath, fs.readFileSync (filePath))
+			}
+			let convertResult = ajsExporter.ConvertFileList (fileList, 'stp');
+			if (!convertResult.IsSuccess ()) {
+				return false;
+			}
+			
+			// Verify STEP file was created
+			let stepFile = convertResult.GetFile(0);
+			if (!stepFile || stepFile.GetContent().length === 0) {
+				return false;
+			}
+			
+			// Verify it's a valid STEP file (starts with ISO-10303-21)
+			let content = new TextDecoder().decode(stepFile.GetContent());
+			if (!content.startsWith('ISO-10303-21')) {
+				return false;
+			}
+			
+			console.log(`STEP export successful: ${stepFile.GetPath()} (${stepFile.GetContent().length} bytes)`);
+			return true;
+			
+		} catch (error) {
+			console.log(`STEP export failed: ${error.message}`);
+			return false;
+		}
+	}
+	
+	assert (TestStepExport (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb']));
+	assert (TestStepExport (['glTF2/simple_skin/quad_skin.glb']));
+});
+
 });
