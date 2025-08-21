@@ -40,7 +40,7 @@ static std::string GetFileNameFromFormat (const std::string& format)
 		fileName += ".stl";
 	} else if (format == "fbx") {
 		fileName += ".fbx";
-	} else if (format == "collada" || format == "dae") {
+	} else if (format == "dae") {
 		fileName += ".dae";
 	} else if (format == "x") {
 		fileName += ".x";
@@ -78,7 +78,14 @@ static bool ExportScene (const aiScene* scene, const std::string& format, Result
 	Assimp::ExportProperties exportProperties;
 	exportProperties.SetPropertyBool ("JSON_SKIP_WHITESPACES", true);
 	std::string fileName = GetFileNameFromFormat (format);
-	aiReturn exportResult = exporter.Export (scene, format.c_str (), fileName.c_str (), 0u, &exportProperties);
+	
+	// Map dae format to collada for Assimp's internal format identifier
+	std::string assimpFormat = format;
+	if (format == "dae") {
+		assimpFormat = "collada";
+	}
+	
+	aiReturn exportResult = exporter.Export (scene, assimpFormat.c_str (), fileName.c_str (), 0u, &exportProperties);
 	if (exportResult != aiReturn_SUCCESS) {
 		result.errorCode = ErrorCode::ExportError;
 		return false;

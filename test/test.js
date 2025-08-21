@@ -809,12 +809,12 @@ it ('FBX Export', function () {
 	assert (IsExportSuccess (['glTF2/BoxWithInfinites-glTF-Binary/BoxWithInfinites.glb'], 'fbx', ['result.fbx']));
 });
 
-it ('COLLADA Export', function () {
-	assert (IsExportSuccess (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'collada', ['result.dae', 'result.dae/result_texture_0001.png']));
-	assert (IsExportSuccess (['glTF2/simple_skin/quad_skin.glb'], 'collada', ['result.dae']));
-	assert (IsExportSuccess (['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'], 'collada', ['result.dae']));
-	assert (IsExportSuccess (['glTF2/BoxBadNormals-glTF-Binary/BoxBadNormals.glb'], 'collada', ['result.dae']));
-	assert (IsExportSuccess (['glTF2/BoxWithInfinites-glTF-Binary/BoxWithInfinites.glb'], 'collada', ['result.dae']));
+it ('DAE Export', function () {
+	assert (IsExportSuccess (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'dae', ['result.dae', 'result.dae/result_texture_0001.png']));
+	assert (IsExportSuccess (['glTF2/simple_skin/quad_skin.glb'], 'dae', ['result.dae']));
+	assert (IsExportSuccess (['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'], 'dae', ['result.dae']));
+	assert (IsExportSuccess (['glTF2/BoxBadNormals-glTF-Binary/BoxBadNormals.glb'], 'dae', ['result.dae']));
+	assert (IsExportSuccess (['glTF2/BoxWithInfinites-glTF-Binary/BoxWithInfinites.glb'], 'dae', ['result.dae']));
 });
 
 it ('X Export', function () {
@@ -834,6 +834,7 @@ it ('X3D Export', function () {
 });
 
 it ('3MF Export', function () {
+  // 3MF appears to be broken in the exporter, no files are generated.
   assert (IsExportSuccess (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], '3mf', []));
   assert (IsExportSuccess (['glTF2/simple_skin/quad_skin.glb'], '3mf', []));
   assert (IsExportSuccess (['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'], '3mf', []));
