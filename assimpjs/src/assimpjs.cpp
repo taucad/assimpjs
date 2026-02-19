@@ -60,6 +60,12 @@ static std::string GetFileNameFromFormat (const std::string& format)
 		fileName += ".assbin";
 	} else if (format == "assxml") {
 		fileName += ".assxml";
+	} else if (format == "usda") {
+		fileName += ".usda";
+	} else if (format == "usdc") {
+		fileName += ".usdc";
+	} else if (format == "usdz") {
+		fileName += ".usdz";
 	}
 	return fileName;
 }
