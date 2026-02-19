@@ -755,22 +755,24 @@ it ('XGL', function () {
 
 it ('USD', function () {
 	if (!ajsAll) {
-		// If all build isn't available, these should error (same as mini build)
 		assert (IsError (['../models-nonbsd/USD/usda/texturedcube.usda']));
 		assert (IsError (['../models-nonbsd/USD/usdc/texturedcube.usdc']));
 	} else {
-		// USD importer should be enabled in all build
-		// Note: USD files are in models-nonbsd directory
+		// USDA format
 		assert (IsSuccess (['../models-nonbsd/USD/usda/texturedcube.usda'], false, ajsAll));
 		assert (IsSuccess (['../models-nonbsd/USD/usda/translated-cube.usda'], false, ajsAll));
 		assert (IsSuccess (['../models-nonbsd/USD/usda/blendshape.usda'], false, ajsAll));
 		assert (IsSuccess (['../models-nonbsd/USD/usda/simple-skin-test.usda'], false, ajsAll));
 		assert (IsSuccess (['../models-nonbsd/USD/usda/simple-skin-animation-test.usda'], false, ajsAll));
 		
+		// USDC format
 		assert (IsSuccess (['../models-nonbsd/USD/usdc/texturedcube.usdc'], false, ajsAll));
 		assert (IsSuccess (['../models-nonbsd/USD/usdc/translated-cube.usdc'], false, ajsAll));
 		assert (IsSuccess (['../models-nonbsd/USD/usdc/blendshape.usdc'], false, ajsAll));
 		assert (IsSuccess (['../models-nonbsd/USD/usdc/suzanne.usdc'], false, ajsAll));
+
+		// USDZ format
+		assert (IsSuccess (['../models-nonbsd/USD/usdz/damaged-helmet-gltf.usdz'], false, ajsAll));
 	}
 });
 });
@@ -810,11 +812,51 @@ it ('FBX Export', function () {
 });
 
 it ('DAE Export', function () {
+	// Test basic export functionality
 	assert (IsExportSuccess (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'dae', ['result.dae', 'result.dae/result_texture_0001.png']));
 	assert (IsExportSuccess (['glTF2/simple_skin/quad_skin.glb'], 'dae', ['result.dae']));
 	assert (IsExportSuccess (['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'], 'dae', ['result.dae']));
 	assert (IsExportSuccess (['glTF2/BoxBadNormals-glTF-Binary/BoxBadNormals.glb'], 'dae', ['result.dae']));
 	assert (IsExportSuccess (['glTF2/BoxWithInfinites-glTF-Binary/BoxWithInfinites.glb'], 'dae', ['result.dae']));
+
+	// Save a sample .dae file for inspection
+	if (ajsExporter) {
+		try {
+			let fileList = new ajsExporter.FileList();
+			let filePath = GetTestFileLocation('glTF2/simple_skin/quad_skin.glb');
+			fileList.AddFile(filePath, fs.readFileSync(filePath));
+			
+			let result = ajsExporter.ConvertFileList(fileList, 'dae');
+			
+			if (result.IsSuccess()) {
+				let outputDir = path.join(__dirname, '../output');
+				
+				// Clean up any existing output directory to avoid conflicts
+				if (fs.existsSync(outputDir)) {
+					fs.rmSync(outputDir, { recursive: true, force: true });
+				}
+				fs.mkdirSync(outputDir, { recursive: true });
+				
+				// Find and save only the main .dae file (skip texture files)
+				for (let i = 0; i < result.FileCount(); i++) {
+					let file = result.GetFile(i);
+					let fileName = file.GetPath();
+					
+					// Only save the main .dae file, skip subdirectory files (textures)
+					if (fileName === 'result.dae') {
+						let content = file.GetContent();
+						let fullPath = path.join(outputDir, fileName);
+						
+						fs.writeFileSync(fullPath, content);
+						console.log(`✓ Saved exported file: ${fullPath}`);
+						break; // Only save the main .dae file
+					}
+				}
+			}
+		} catch (error) {
+			console.log(`Failed to save .dae file for inspection: ${error.message}`);
+		}
+	}
 });
 
 it ('X Export', function () {
@@ -856,5 +898,23 @@ it ('STEP Export', function () {
 	assert (IsExportSuccess (['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'], 'stp', ['result.stp']));
 	assert (IsExportSuccess (['glTF2/BoxBadNormals-glTF-Binary/BoxBadNormals.glb'], 'stp', ['result.stp']));
 	assert (IsExportSuccess (['glTF2/BoxWithInfinites-glTF-Binary/BoxWithInfinites.glb'], 'stp', ['result.stp']));
+});
+
+it ('USDA Export', function () {
+	// Basic geometry
+	assert (IsExportSuccess (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'usda', ['result.usda']));
+	assert (IsExportSuccess (['glTF2/simple_skin/quad_skin.glb'], 'usda', ['result.usda']));
+	assert (IsExportSuccess (['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'], 'usda', ['result.usda']));
+	assert (IsExportSuccess (['glTF2/BoxBadNormals-glTF-Binary/BoxBadNormals.glb'], 'usda', ['result.usda']));
+	assert (IsExportSuccess (['glTF2/BoxWithInfinites-glTF-Binary/BoxWithInfinites.glb'], 'usda', ['result.usda']));
+});
+
+it ('USDZ Export', function () {
+	// Basic geometry
+	assert (IsExportSuccess (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], 'usdz', ['result.usdz']));
+	assert (IsExportSuccess (['glTF2/simple_skin/quad_skin.glb'], 'usdz', ['result.usdz']));
+	assert (IsExportSuccess (['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'], 'usdz', ['result.usdz']));
+	assert (IsExportSuccess (['glTF2/BoxBadNormals-glTF-Binary/BoxBadNormals.glb'], 'usdz', ['result.usdz']));
+	assert (IsExportSuccess (['glTF2/BoxWithInfinites-glTF-Binary/BoxWithInfinites.glb'], 'usdz', ['result.usdz']));
 });
 });
