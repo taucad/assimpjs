@@ -297,6 +297,7 @@ def render_animation_gif(stage, cam, recorder, base_output_path, start_time, end
             append_images=frames[1:],
             duration=frame_duration_ms,
             loop=0,
+            disposal=2,
             optimize=True,
         )
         return gif_path
@@ -653,12 +654,14 @@ def main():
         for f in failures:
             print(f"  - {f}")
 
-    if args.reference_dir:
-        html_path = generate_html_report(
-            args.output_dir, results, args.reference_dir, args.gltf_render_dir)
-        print(f"\nHTML report: {html_path}")
-
     json_path = os.path.join(args.output_dir, "render-results.json")
+    if args.filter and os.path.isfile(json_path):
+        with open(json_path) as f:
+            existing = json.load(f)
+        updated_names = {(r["name"], r.get("format", "")) for r in results}
+        merged = [r for r in existing if (r["name"], r.get("format", "")) not in updated_names]
+        merged.extend(results)
+        results = sorted(merged, key=lambda r: (r["name"], r.get("format", "")))
     with open(json_path, "w") as f:
         json.dump(results, f, indent=2)
 

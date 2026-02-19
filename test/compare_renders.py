@@ -194,6 +194,13 @@ def main():
     print(f"Results: {pass_count} pass, {fail_count} fail, {skip_count} skip")
 
     json_path = os.path.join(args.output_dir, "comparison-results.json")
+    if args.filter and os.path.isfile(json_path):
+        with open(json_path) as f:
+            existing = json.load(f)
+        updated_names = {r["name"] for r in results}
+        merged = [r for r in existing if r["name"] not in updated_names]
+        merged.extend(results)
+        results = sorted(merged, key=lambda r: r["name"])
     with open(json_path, "w") as f:
         json.dump(results, f, indent=2)
     print(f"Results JSON: {json_path}")

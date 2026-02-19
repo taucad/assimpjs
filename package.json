@@ -11,7 +11,6 @@
 		"model",
 		"converter"
 	],
-
 	"exports": {
 		".": {
 			"import": "./dist/assimpjs-mini.js",
@@ -35,8 +34,11 @@
 		"README.md"
 	],
 	"devDependencies": {
+		"gif-encoder-2": "^1.0.5",
 		"http-server": "^0.12.3",
-		"mocha": "^8.3.2"
+		"mocha": "^8.3.2",
+		"pngjs": "^7.0.0",
+		"puppeteer": "^24.37.4"
 	},
 	"scripts": {
 		"start": "http-server",
@@ -49,6 +51,5 @@
 		"clean:mini": "tools/build_wasm_deb.sh clean-mini",
 		"clean:all": "tools/build_wasm_deb.sh clean-all",
 		"clean:exporter": "tools/build_wasm_deb.sh clean-exporter"
-	},
-	"dependencies": {}
+	}
 }

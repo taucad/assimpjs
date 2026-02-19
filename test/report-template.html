@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USD Export Validation Report</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+  :root { --bg: #1a1a1a; --surface: #222; --border: #333; --text: #e0e0e0; --muted: #888; --green: #4caf50; --red: #ef5350; --yellow: #ffc107; --blue: #42a5f5; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  .header { position: sticky; top: 0; z-index: 100; background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; }
+  .header h1 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .stats span { background: var(--bg); padding: 2px 8px; border-radius: 4px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .controls input[type="text"] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; width: 220px; font-size: 13px; }
+  .controls button { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .controls button.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .controls button:hover { border-color: var(--blue); }
+  .legend { font-size: 11px; color: var(--muted); padding: 8px 20px; background: var(--surface); border-bottom: 1px solid var(--border); line-height: 1.6; }
+  table { width: 100%; border-collapse: collapse; }
+  th { position: sticky; top: 80px; background: var(--surface); padding: 8px 6px; text-align: left; border-bottom: 2px solid var(--border); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); cursor: pointer; user-select: none; white-space: nowrap; }
+  th:hover { color: var(--text); }
+  th .arrow { font-size: 10px; margin-left: 2px; }
+  td { padding: 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:hover { background: rgba(255,255,255,0.03); }
+  .model-name { font-weight: 500; min-width: 120px; max-width: 180px; word-break: break-word; font-size: 13px; }
+  .model-name .anim-badge { color: var(--blue); font-size: 11px; margin-left: 4px; }
+  .thumb { width: 120px; height: 90px; object-fit: contain; background: var(--bg); border-radius: 4px; cursor: pointer; display: block; }
+  .thumb:hover { outline: 2px solid var(--blue); }
+  .val-cell { text-align: right; font-variant-numeric: tabular-nums; }
+  .val-green { color: var(--green); }
+  .val-red { color: var(--red); }
+  .val-yellow { color: var(--yellow); }
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 200; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .lightbox img { max-width: 90vw; max-height: 90vh; object-fit: contain; }
+  .no-img { width: 120px; height: 90px; background: var(--bg); border-radius: 4px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 11px; }
+  .sort-group { display: flex; gap: 4px; font-size: 11px; color: var(--muted); align-items: center; }
+  @media (max-width: 900px) { .thumb { width: 80px; height: 60px; } }
+</style>
+</head>
+<body x-data="dashboard()" x-init="init()">
+
+<div class="header">
+  <h1>USD Export Validation Report</h1>
+  <div class="stats" x-show="loaded">
+    <span x-text="`${summary.total} models`"></span>
+    <span x-text="`${summary.rendered} renders`"></span>
+    <span x-text="`${summary.animated} animated`"></span>
+    <span x-text="`${passCount} pass (FLIP ≤ 0.15)`"></span>
+    <span x-text="`${failCount} fail`"></span>
+    <span x-text="`Generated: ${generated}`"></span>
+  </div>
+  <div class="controls">
+    <input type="text" placeholder="Search models..." x-model="search" @input="applyFilters()">
+    <button :class="{ active: filterMode === 'all' }" @click="filterMode = 'all'; applyFilters()">All</button>
+    <button :class="{ active: filterMode === 'pass' }" @click="filterMode = 'pass'; applyFilters()">Pass</button>
+    <button :class="{ active: filterMode === 'fail' }" @click="filterMode = 'fail'; applyFilters()">Fail</button>
+    <button :class="{ active: filterMode === 'animated' }" @click="filterMode = 'animated'; applyFilters()">Animated</button>
+    <span class="sort-group" x-text="`Showing ${filtered.length} of ${models.length}`"></span>
+  </div>
+</div>
+
+<div class="legend">
+  <strong>Val</strong> = USD validation errors (usdchecker). 0 = spec-compliant.
+  &nbsp;|&nbsp;
+  <strong>FLIP</strong> = NVIDIA FLIP perceptual error (0 = identical, 1 = max difference). Purpose-built for rendered image comparison. Lower is better. Green ≤ 0.15 (pass).
+  &nbsp;|&nbsp;
+  <strong>SSIM</strong> = Structural Similarity Index (0 = different, 1 = identical). Higher is better.
+</div>
+
+<div x-show="lightboxSrc" class="lightbox" @click="lightboxSrc = null">
+  <img :src="lightboxSrc">
+</div>
+
+<table x-show="loaded">
+  <thead>
+    <tr>
+      <th @click="sortBy('name')">Model <span class="arrow" x-text="sortArrow('name')"></span></th>
+      <th>Reference</th>
+      <th>glTF</th>
+      <th>USDA</th>
+      <th>USDZ</th>
+      <th>FLIP Heatmap</th>
+      <th @click="sortBy('validation_errors')" class="val-cell">Val <span class="arrow" x-text="sortArrow('validation_errors')"></span></th>
+      <th @click="sortBy('flip')" class="val-cell">FLIP <span class="arrow" x-text="sortArrow('flip')"></span></th>
+      <th @click="sortBy('ssim')" class="val-cell">SSIM <span class="arrow" x-text="sortArrow('ssim')"></span></th>
+    </tr>
+  </thead>
+  <tbody>
+    <template x-for="m in filtered" :key="m.name">
+      <tr>
+        <td class="model-name">
+          <span x-text="m.name"></span>
+          <span class="anim-badge" x-show="m.animated">A</span>
+        </td>
+        <td><template x-if="m.images.ref"><img class="thumb" :src="m.images.ref" @click="lightboxSrc = m.images.ref" loading="lazy"></template><template x-if="!m.images.ref"><div class="no-img">--</div></template></td>
+        <td><template x-if="m.images.gltf"><img class="thumb" :src="m.images.gltf" @click="lightboxSrc = m.images.gltf" loading="lazy"></template><template x-if="!m.images.gltf"><div class="no-img">--</div></template></td>
+        <td><template x-if="m.images.usda"><img class="thumb" :src="m.images.usda" @click="lightboxSrc = m.images.usda" loading="lazy"></template><template x-if="!m.images.usda"><div class="no-img">--</div></template></td>
+        <td><template x-if="m.images.usdz"><img class="thumb" :src="m.images.usdz" @click="lightboxSrc = m.images.usdz" loading="lazy"></template><template x-if="!m.images.usdz"><div class="no-img">--</div></template></td>
+        <td><template x-if="m.images.flip"><img class="thumb" :src="m.images.flip" @click="lightboxSrc = m.images.flip" loading="lazy"></template><template x-if="!m.images.flip"><div class="no-img">--</div></template></td>
+        <td class="val-cell" :class="m.validation_errors > 0 ? 'val-red' : 'val-green'" x-text="m.validation_errors ?? '--'"></td>
+        <td class="val-cell" :class="flipClass(m.flip)" x-text="m.flip != null ? m.flip.toFixed(2) : '--'"></td>
+        <td class="val-cell" :class="ssimClass(m.ssim)" x-text="m.ssim != null ? m.ssim.toFixed(2) : '--'"></td>
+      </tr>
+    </template>
+  </tbody>
+</table>
+
+<p x-show="!loaded" style="padding: 40px; text-align: center; color: var(--muted);">Loading data.json...</p>
+
+<script>
+function dashboard() {
+  return {
+    models: [],
+    filtered: [],
+    loaded: false,
+    search: '',
+    filterMode: 'all',
+    sortCol: 'name',
+    sortAsc: true,
+    lightboxSrc: null,
+    summary: { total: 0, rendered: 0, animated: 0 },
+    generated: '',
+    passCount: 0,
+    failCount: 0,
+
+    async init() {
+      try {
+        const resp = await fetch('./data.json');
+        const data = await resp.json();
+        this.models = data.models || [];
+        this.summary = data.summary || {};
+        this.generated = (data.generated || '').replace('T', ' ').replace('Z', ' UTC');
+        this.passCount = this.models.filter(m => m.flip != null && m.flip <= 0.15).length;
+        this.failCount = this.models.filter(m => m.flip != null && m.flip > 0.15).length;
+        this.loaded = true;
+        this.applyFilters();
+      } catch (e) {
+        console.error('Failed to load data.json:', e);
+      }
+    },
+
+    applyFilters() {
+      let list = this.models;
+      const q = this.search.toLowerCase().trim();
+      if (q) list = list.filter(m => m.name.toLowerCase().includes(q));
+      if (this.filterMode === 'pass') list = list.filter(m => m.flip != null && m.flip <= 0.15);
+      else if (this.filterMode === 'fail') list = list.filter(m => m.flip != null && m.flip > 0.15);
+      else if (this.filterMode === 'animated') list = list.filter(m => m.animated);
+      list = [...list].sort((a, b) => {
+        let va = a[this.sortCol], vb = b[this.sortCol];
+        if (va == null) va = this.sortAsc ? Infinity : -Infinity;
+        if (vb == null) vb = this.sortAsc ? Infinity : -Infinity;
+        if (typeof va === 'string') return this.sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        return this.sortAsc ? va - vb : vb - va;
+      });
+      this.filtered = list;
+    },
+
+    sortBy(col) {
+      if (this.sortCol === col) this.sortAsc = !this.sortAsc;
+      else { this.sortCol = col; this.sortAsc = col === 'name'; }
+      this.applyFilters();
+    },
+
+    sortArrow(col) {
+      if (this.sortCol !== col) return '';
+      return this.sortAsc ? '▲' : '▼';
+    },
+
+    flipClass(v) {
+      if (v == null) return '';
+      return v <= 0.15 ? 'val-green' : 'val-red';
+    },
+
+    ssimClass(v) {
+      if (v == null) return '';
+      return v >= 0.85 ? 'val-green' : v >= 0.7 ? 'val-yellow' : 'val-red';
+    }
+  };
+}
+</script>
+</body>
+</html>

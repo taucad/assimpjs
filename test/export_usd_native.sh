@@ -32,7 +32,9 @@ if [ ! -f "$MODEL_INDEX" ]; then
     exit 1
 fi
 
-rm -rf "$OUT_DIR"
+if [ -z "$FILTER" ]; then
+    rm -rf "$OUT_DIR"
+fi
 mkdir -p "$OUT_DIR"
 
 python3 << 'PYEOF'
@@ -114,6 +116,13 @@ print("=" * 60)
 print(f"Results: {passed} passed, {failed} failed, {skipped} skipped (of {total} exports)")
 
 results_path = os.path.join(out_dir, "export-results.json")
+if name_filter and os.path.isfile(results_path):
+    with open(results_path) as f:
+        existing = json.load(f)
+    updated_names = {(r["name"], r.get("format", "")) for r in results}
+    merged = [r for r in existing if (r["name"], r.get("format", "")) not in updated_names]
+    merged.extend(results)
+    results = merged
 with open(results_path, "w") as f:
     json.dump(results, f, indent=2)
 print(f"Results JSON: {results_path}")
