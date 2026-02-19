@@ -67,6 +67,9 @@ elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseExporter")
   set (ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "")    # For GLTF 1.0 & 2.0 + GLB support
   set (ASSIMP_BUILD_ASSJSON_IMPORTER ON CACHE BOOL "") # For internal JSON conversion
   
+  # USD importer required for USD exporter (shared tinyusdz dependency)
+  set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
+  
   # Enable most EXPORTERS (excluding problematic ones)
   set (ASSIMP_BUILD_PBRT_EXPORTER OFF CACHE BOOL "")  # Not required
   set (ASSIMP_BUILD_M3D_EXPORTER OFF CACHE BOOL "")  # Disabled due memory leaks
