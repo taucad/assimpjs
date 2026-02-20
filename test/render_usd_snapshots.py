@@ -87,46 +87,69 @@ def validate_usd_file(stage):
 
 
 def compute_framing(stage):
-    root = stage.GetDefaultPrim()
-    if not root:
-        children = stage.GetPseudoRoot().GetChildren()
-        root = children[0] if children else None
-    if not root:
+    """Compute scene framing matching the glTF-Sample-Viewer algorithm.
+
+    The glTF viewer's getExtentsFromAccessor expands each mesh primitive's
+    world-space AABB to a bounding sphere (center ± half-diagonal), then
+    accumulates across all primitives.  fitDistanceToExtents computes
+    distance = max(X_extent, Y_extent) / 2 / tan(yfov/2), using only the
+    X and Y dimensions (Z is depth).  We replicate this here so that
+    camera framing matches exactly.
+    """
+    cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), ["default", "render", "proxy"])
+
+    scene_min = [float('inf')] * 3
+    scene_max = [float('-inf')] * 3
+    found_any = False
+
+    for prim in stage.Traverse():
+        if not prim.IsA(UsdGeom.Mesh):
+            continue
+        bounds = cache.ComputeWorldBound(prim)
+        rng = bounds.ComputeAlignedRange()
+        if rng.IsEmpty():
+            continue
+
+        bmin = rng.GetMin()
+        bmax = rng.GetMax()
+        cx = (bmin[0] + bmax[0]) * 0.5
+        cy = (bmin[1] + bmax[1]) * 0.5
+        cz = (bmin[2] + bmax[2]) * 0.5
+        hx = (bmax[0] - bmin[0]) * 0.5
+        hy = (bmax[1] - bmin[1]) * 0.5
+        hz = (bmax[2] - bmin[2]) * 0.5
+        radius = math.sqrt(hx * hx + hy * hy + hz * hz)
+
+        for i, (c, r) in enumerate([(cx, radius), (cy, radius), (cz, radius)]):
+            scene_min[i] = min(scene_min[i], c - r)
+            scene_max[i] = max(scene_max[i], c + r)
+        found_any = True
+
+    if not found_any:
         return None
 
-    cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), ["default", "render", "proxy", "guide"])
-    bounds = cache.ComputeWorldBound(root)
-    rng = bounds.GetRange()
-
-    if rng.IsEmpty():
-        for prim in stage.Traverse():
-            if prim.IsA(UsdGeom.Mesh):
-                b = cache.ComputeWorldBound(prim)
-                r = b.GetRange()
-                if not r.IsEmpty():
-                    rng = Gf.Range3d.GetUnion(rng, r)
-
-    if rng.IsEmpty():
+    center = Gf.Vec3d(
+        (scene_min[0] + scene_max[0]) * 0.5,
+        (scene_min[1] + scene_max[1]) * 0.5,
+        (scene_min[2] + scene_max[2]) * 0.5,
+    )
+    extent_x = scene_max[0] - scene_min[0]
+    extent_y = scene_max[1] - scene_min[1]
+    max_half = max(extent_x, extent_y) * 0.5
+    if max_half < 1e-6:
         return None
 
-    center = (rng.GetMin() + rng.GetMax()) / 2.0
-    size = rng.GetSize()
-    half = Gf.Vec3d(size[0] / 2.0, size[1] / 2.0, size[2] / 2.0)
-    radius = half.GetLength()
-    if radius < 1e-6:
-        return None
-
-    return center, radius
+    return center, max_half
 
 
 def inject_camera(stage, center, radius, yaw_deg=30.0, pitch_deg=20.0):
     """Inject a camera using orbit parametrization matching glTF-Sample-Viewer.
 
     The camera orbits around the scene center at the given yaw (rotation
-    around Y axis) and pitch (elevation) angles.  Distance is computed
-    from the bounding-sphere radius at yfov=45deg, replicating the
-    glTF-Sample-Viewer's fitDistanceToExtents logic.  The X offset is
-    negated to match the viewer's orbit sign convention.
+    around Y axis) and pitch (elevation) angles.  ``radius`` is the
+    max(X_extent, Y_extent)/2 from the sphere-expanded scene bounds,
+    matching glTF-Sample-Viewer's fitDistanceToExtents which computes
+    distance = maxAxisLength/2 / tan(yfov/2).
     Camera apertures are authored on the root layer via DefinePrim
     since session-layer aperture overrides are ignored by Storm.
     """
@@ -556,7 +579,7 @@ def main():
     )
     parser.add_argument(
         "--dome-intensity", type=float, default=1.35,
-        help="DomeLight intensity for IBL (default: 1.35, tuned to match glTF-Sample-Viewer)",
+        help="DomeLight intensity for IBL (default: 1.35, tuned to match glTF-Sample-Viewer output)",
     )
     parser.add_argument(
         "--no-validate", action="store_true",

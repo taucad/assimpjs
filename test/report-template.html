@@ -58,6 +58,8 @@
     <button :class="{ active: filterMode === 'pass' }" @click="filterMode = 'pass'; applyFilters()">Pass</button>
     <button :class="{ active: filterMode === 'fail' }" @click="filterMode = 'fail'; applyFilters()">Fail</button>
     <button :class="{ active: filterMode === 'animated' }" @click="filterMode = 'animated'; applyFilters()">Animated</button>
+    <span style="width:1px;background:var(--border);height:20px;margin:0 4px"></span>
+    <button :class="{ active: animView }" @click="animView = !animView">Show Animations</button>
     <span class="sort-group" x-text="`Showing ${filtered.length} of ${models.length}`"></span>
   </div>
 </div>
@@ -97,8 +99,8 @@
         </td>
         <td><template x-if="m.images.ref"><img class="thumb" :src="m.images.ref" @click="lightboxSrc = m.images.ref" loading="lazy"></template><template x-if="!m.images.ref"><div class="no-img">--</div></template></td>
         <td><template x-if="m.images.gltf"><img class="thumb" :src="m.images.gltf" @click="lightboxSrc = m.images.gltf" loading="lazy"></template><template x-if="!m.images.gltf"><div class="no-img">--</div></template></td>
-        <td><template x-if="m.images.usda"><img class="thumb" :src="m.images.usda" @click="lightboxSrc = m.images.usda" loading="lazy"></template><template x-if="!m.images.usda"><div class="no-img">--</div></template></td>
-        <td><template x-if="m.images.usdz"><img class="thumb" :src="m.images.usdz" @click="lightboxSrc = m.images.usdz" loading="lazy"></template><template x-if="!m.images.usdz"><div class="no-img">--</div></template></td>
+        <td><template x-if="usdSrc(m, 'usda')"><img class="thumb" :src="usdSrc(m, 'usda')" @click="lightboxSrc = usdSrc(m, 'usda')" loading="lazy"></template><template x-if="!usdSrc(m, 'usda')"><div class="no-img">--</div></template></td>
+        <td><template x-if="usdSrc(m, 'usdz')"><img class="thumb" :src="usdSrc(m, 'usdz')" @click="lightboxSrc = usdSrc(m, 'usdz')" loading="lazy"></template><template x-if="!usdSrc(m, 'usdz')"><div class="no-img">--</div></template></td>
         <td><template x-if="m.images.flip"><img class="thumb" :src="m.images.flip" @click="lightboxSrc = m.images.flip" loading="lazy"></template><template x-if="!m.images.flip"><div class="no-img">--</div></template></td>
         <td class="val-cell" :class="m.validation_errors > 0 ? 'val-red' : 'val-green'" x-text="m.validation_errors ?? '--'"></td>
         <td class="val-cell" :class="flipClass(m.flip)" x-text="m.flip != null ? m.flip.toFixed(2) : '--'"></td>
@@ -121,6 +123,7 @@ function dashboard() {
     sortCol: 'name',
     sortAsc: true,
     lightboxSrc: null,
+    animView: false,
     summary: { total: 0, rendered: 0, animated: 0 },
     generated: '',
     passCount: 0,
@@ -173,6 +176,14 @@ function dashboard() {
     flipClass(v) {
       if (v == null) return '';
       return v <= 0.15 ? 'val-green' : 'val-red';
+    },
+
+    usdSrc(m, fmt) {
+      if (this.animView && m.animated) {
+        const gif = m.images['gif_' + fmt];
+        if (gif) return gif;
+      }
+      return m.images[fmt] || null;
     },
 
     ssimClass(v) {

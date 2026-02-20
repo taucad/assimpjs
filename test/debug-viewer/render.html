@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>glTF Headless Render</title>
+<style>
+  * { margin: 0; padding: 0; }
+  body { background: transparent; overflow: hidden; }
+  canvas { display: block; }
+</style>
+<script src="https://www.gstatic.com/draco/v1/decoders/draco_decoder_gltf.js"></script>
+<script src="libs/libktx.js"></script>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script type="module">
+import { GltfView, GltfState, ResourceLoader } from './gltf-viewer.module.js';
+
+const params = new URLSearchParams(location.search);
+const modelUrl = params.get('model');
+const envUrl = params.get('env');
+const width = parseInt(params.get('width') || '512');
+const height = parseInt(params.get('height') || '512');
+const yawDeg = parseFloat(params.get('yaw') || '30');
+const pitchDeg = parseFloat(params.get('pitch') || '20');
+
+const canvas = document.getElementById('canvas');
+canvas.width = width;
+canvas.height = height;
+canvas.style.width = width + 'px';
+canvas.style.height = height + 'px';
+
+const context = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: false, antialias: true, preserveDrawingBuffer: true });
+const view = new GltfView(context);
+const resourceLoader = view.createResourceLoader(undefined, undefined, './libs/');
+const state = view.createState();
+
+state.renderingParameters.clearColor = [0, 0, 0, 0];
+state.renderingParameters.toneMap = GltfState.ToneMaps.NONE;
+state.renderingParameters.useIBL = true;
+state.renderingParameters.iblIntensity = 1.0;
+state.renderingParameters.usePunctual = true;
+state.renderingParameters.renderEnvironmentMap = false;
+state.renderingParameters.blurEnvironmentMap = true;
+state.renderingParameters.useDirectionalLightsWithDisabledIBL = true;
+state.renderingParameters.environmentRotation = 90.0;
+
+window.__RENDER_READY = false;
+window.__RENDER_ERROR = null;
+
+async function loadAndRender() {
+  try {
+    if (envUrl) {
+      const env = await resourceLoader.loadEnvironment(envUrl);
+      state.environment = env;
+    }
+
+    if (!modelUrl) {
+      window.__RENDER_ERROR = 'No model URL provided';
+      return;
+    }
+
+    const gltf = await resourceLoader.loadGltf(modelUrl);
+    state.gltf = gltf;
+    const defaultScene = gltf.scene;
+    state.sceneIndex = defaultScene === undefined ? 0 : defaultScene;
+    state.cameraNodeIndex = undefined;
+
+    if (gltf.scenes.length === 0) {
+      window.__RENDER_ERROR = 'No scenes in model';
+      return;
+    }
+
+    if (state.sceneIndex > gltf.scenes.length - 1) {
+      state.sceneIndex = 0;
+    }
+
+    const scene = gltf.scenes[state.sceneIndex];
+    scene.applyTransformHierarchy(gltf);
+
+    state.userCamera.perspective.aspectRatio = canvas.width / canvas.height;
+    state.userCamera.resetView(gltf, state.sceneIndex);
+
+    const orbitSpeed = state.userCamera.orbitSpeed;
+    const yawRaw = (yawDeg * Math.PI / 180) / orbitSpeed;
+    const pitchRaw = (pitchDeg * Math.PI / 180) / orbitSpeed;
+    state.userCamera.orbit(yawRaw, pitchRaw);
+
+    {
+      const scene = gltf.scenes[state.sceneIndex];
+      const nodeTransforms = [];
+      const accessorInfo = [];
+      let nodeIndices = scene.nodes.slice();
+      while (nodeIndices.length > 0) {
+        const nodeIdx = nodeIndices.pop();
+        const node = gltf.nodes[nodeIdx];
+        nodeIndices = nodeIndices.concat(node.children);
+        if (node.mesh !== undefined) {
+          nodeTransforms.push({
+            nodeIndex: nodeIdx,
+            mesh: node.mesh,
+            worldTransform: Array.from(node.worldTransform),
+          });
+        }
+      }
+      window.__CAMERA_INFO = {
+        distance: state.userCamera.distance,
+        position: Array.from(state.userCamera.getPosition()),
+        sceneExtents: {
+          min: Array.from(state.userCamera.sceneExtents.min),
+          max: Array.from(state.userCamera.sceneExtents.max),
+        },
+        yfov: state.userCamera.perspective.yfov,
+        aspectRatio: state.userCamera.perspective.aspectRatio,
+        nodeTransforms: nodeTransforms,
+        accessorInfo: accessorInfo,
+      };
+    }
+
+    state.animationIndices = [];
+    for (let i = 0; i < gltf.animations.length; i++) {
+      if (!gltf.nonDisjointAnimations(state.animationIndices).includes(i)) {
+        state.animationIndices.push(i);
+      }
+    }
+
+    let frameCount = 0;
+    function renderLoop() {
+      view.renderFrame(state, canvas.width, canvas.height);
+      frameCount++;
+      if (frameCount < 10) {
+        requestAnimationFrame(renderLoop);
+      } else {
+        window.__RENDER_READY = true;
+      }
+    }
+    requestAnimationFrame(renderLoop);
+
+  } catch (err) {
+    console.error('Render error:', err);
+    window.__RENDER_ERROR = err.message || String(err);
+    window.__RENDER_READY = true;
+  }
+}
+
+loadAndRender();
+</script>
+</body>
+</html>

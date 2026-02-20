@@ -219,7 +219,10 @@ def step_report(filters):
 
         anim_gif = os.path.join(PATHS["usd_renders"], f"{name}_usda.gif")
         if os.path.isfile(anim_gif):
-            images["gif"] = copy_image(anim_gif, f"{name}_usda", filters, name)
+            images["gif_usda"] = copy_image(anim_gif, f"{name}_usda", filters, name)
+        anim_gif_z = os.path.join(PATHS["usd_renders"], f"{name}_usdz.gif")
+        if os.path.isfile(anim_gif_z):
+            images["gif_usdz"] = copy_image(anim_gif_z, f"{name}_usdz", filters, name)
 
         if ren.get("animated"):
             total_animated += 1
