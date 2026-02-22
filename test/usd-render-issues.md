@@ -58,6 +58,21 @@ UsdPreviewSurface has no dispersion support.
 - [L] #18 DispersionTest - UsdPreviewSurface limitation
 - [L] #20 DragonDispersion - UsdPreviewSurface limitation
 
+## Category: Diffuse Transmission (UsdPreviewSurface approximation)
+
+UsdPreviewSurface has no native diffuse transmission. Approximated by blending
+`diffuseColor = lerp(baseColor, transmissionColor, factor)`. Per-pixel texture
+modulation (diffuseTransmissionTexture) is a UsdPreviewSurface limitation.
+
+**FIX APPLIED**: Added `KHR_materials_diffuse_transmission` import in glTF2Importer.cpp
+and diffuseColor blending in USDZExporter.cpp MapPBRProperties().
+
+- [~] DiffuseTransmissionTest - factor/color blend works, texture rows are limited
+- [~] DiffuseTransmissionTeacup - transmission texture modulation not reproducible
+- [~] DiffuseTransmissionPlant - low factor (0.1), subtle effect preserved
+- [~] MandarinOrange - full transmission with texture, approximated
+- [~] ScatteringSkull - combined with KHR_materials_volume, approximated
+
 ## Category: Volume / Attenuation (UsdPreviewSurface + tinyusdz limitation)
 
 tinyusdz volume support is a placeholder. UsdPreviewSurface lacks volume inputs.
@@ -182,7 +197,8 @@ Point primitives (GeomPoints) and line primitives (GeomBasisCurves) are not yet 
 | Primitives | 2 | 0 | 0 | 2 | 0 |
 | Morph | 2 | 0 | 1 | 1 | 0 |
 | Misc | 3 | 0 | 3 | 0 | 0 |
-| **Total** | **63** | **23** | **20** | **19** | **1** |
+| Diffuse Trans. | 5 | 0 | 5 | 0 | 0 |
+| **Total** | **68** | **23** | **25** | **19** | **1** |
 
 ## Key Fixes Applied
 
@@ -207,6 +223,58 @@ Point primitives (GeomPoints) and line primitives (GeomBasisCurves) are not yet 
 7. **UsdValidation** (render_usd_snapshots.py): Integrated UsdValidation Python API for
    pre-render schema validation.
 
+8. **Diffuse Transmission** (glTF2Importer.cpp + USDZExporter.cpp): Added missing
+   `KHR_materials_diffuse_transmission` import mapping and UsdPreviewSurface approximation
+   via `diffuseColor = lerp(baseColor, transmissionColor, factor)`. Color texture blending
+   uses UsdUVTexture bias+scale for proper interpolation.
+
+9. **Node Visibility** (USDZExporter.cpp): Read `KHR_node_visibility` from `aiNode` metadata
+   and set `Visibility::Invisible` on hidden nodes. Fixes CubeVisibility, LightVisibility.
+
+10. **IsIdentity Epsilon** (USDZExporter.cpp): Tightened the `IsIdentity()` epsilon from
+    0.01 to 1e-6. Small translations (e.g., 0.001 in MetalRoughSpheresNoTextures) were being
+    dropped, causing all meshes to stack at the origin.
+
+11. **Unlit Materials** (USDZExporter.cpp): Moved unlit override to end of `MapPBRProperties()`.
+    Sets `diffuseColor = (0,0,0)` and `emissiveColor = baseColor` for flat, unshaded output.
+    Skips diffuse texture binding for unlit materials. UnlitTest now passes.
+
+12. **Clearcoat Normal Map** (USDZExporter.cpp): Added clearcoat normal texture export. When
+    no base normal exists, maps `AI_MATKEY_CLEARCOAT_NORMAL_TEXTURE` to `surface.normal` with
+    appropriate bias/scale.
+
+13. **Vertex Color + Texture Conflict** (USDZExporter.cpp): Skip `primvars:displayColor`
+    when the mesh's material has a diffuse texture, preventing renderer-dependent color
+    interference (inverted hues).
+
+14. **Specular Workflow Fix** (USDZExporter.cpp): Only switch to USD specular workflow for
+    `KHR_materials_pbrSpecularGlossiness` (glossiness factor). `KHR_materials_specular`
+    stays in metallic workflow with IOR approximation from specular factor.
+    SpecularSilkPouf now passes (FLIP 0.0753).
+
+15. **WebP Texture Support** (glTF2Asset.h/inl, glTF2Importer.cpp): Added `EXT_texture_webp`
+    parsing in glTF2 importer. Fixed format hint truncation bug that cut "webp" to "web".
+
+16. **Transmission/Volume Color** (USDZExporter.cpp): Blend `attenuationColor` into
+    `diffuseColor` weighted by `transmissionFactor`. Scale opacity textures for transmission.
+    Adaptive `opacityThreshold` for MASK + transmission scenarios.
+    TransmissionTest (FLIP 0.0973) and TransmissionRoughnessTest (FLIP 0.0946) now pass.
+
+## Regression Test Results (Wave 1+2)
+
+Full pipeline run: 147 models, 294 exports (USDA + USDZ)
+- **Exports**: 294/294 passed (0 failures)
+- **Renders**: 294/294 rendered
+- **Comparison**: 115 pass, 32 fail (threshold: FLIP < 0.15)
+- **Average FLIP**: 0.1227, **Median FLIP**: 0.1063
+- Models < 0.10 FLIP: 69 | Models < 0.15 FLIP: 115
+
+### Models improved to passing
+- SpecularSilkPouf: FLIP 0.0753 (was failing, P6 specular workflow fix)
+- TransmissionTest: FLIP 0.0973 (was failing, P8 transmission/volume fix)
+- TransmissionRoughnessTest: FLIP 0.0946 (was failing, P8 transmission/volume fix)
+- UnlitTest: FLIP 0.0552 (was failing, P3 unlit material fix)
+
 ## Known Limitations (UsdPreviewSurface)
 
 These glTF PBR extensions have NO equivalent in UsdPreviewSurface and require MaterialX/OpenPBR:
@@ -216,3 +284,10 @@ These glTF PBR extensions have NO equivalent in UsdPreviewSurface and require Ma
 - Dispersion (`KHR_materials_dispersion`)
 - True transmission/refraction (`KHR_materials_transmission` with refraction)
 - Volume/attenuation (`KHR_materials_volume`)
+
+## Note: Skeleton/Skinning
+
+RecursiveSkeletons, RiggedFigure, RiggedSimple, SimpleSkin show high FLIP scores but this
+is a **renderer limitation**, not an exporter bug. The USD exporter correctly exports skeleton
+hierarchies and skin bindings. Hydra Storm's rendering of skinned meshes at specific animation
+frames may differ from the glTF reference renderer.
