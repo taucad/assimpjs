@@ -78,9 +78,10 @@ elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseExporter")
 endif()
 
 if (${EMSCRIPTEN})
-  # Set global flags so assimp library gets optimized
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG -flto -funroll-loops -finline-functions -fomit-frame-pointer")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG -flto -funroll-loops -finline-functions -fomit-frame-pointer")
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -DNDEBUG")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -DNDEBUG")
 endif()
 
 # build zlib from sources instead of looking for system zlib
@@ -107,34 +108,37 @@ if (${EMSCRIPTEN})
 	target_compile_options (AssimpJS PUBLIC "$<$<CONFIG:Debug>:-gsource-map>")
 	target_compile_options (AssimpJS PUBLIC -fexceptions)
 
-  # LTO for linking - AssimpJS target only
-  target_link_options(AssimpJS PRIVATE -flto)
-
+	# Module output: ESM with factory function
 	target_link_options (AssimpJS PUBLIC -sMODULARIZE=1)
 	target_link_options (AssimpJS PUBLIC -sEXPORT_NAME=assimpjs)
-	target_link_options (AssimpJS PUBLIC -sNO_DISABLE_EXCEPTION_CATCHING)
+	target_link_options (AssimpJS PUBLIC -sEXPORT_ES6=1)
+	target_link_options (AssimpJS PUBLIC -sENVIRONMENT=web,node)
 
-	# Production: Disable assertions for smaller WASM size (enable -sASSERTIONS=1 for debugging)
-	# target_link_options (AssimpJS PUBLIC -sASSERTIONS=1 -sSAFE_HEAP=1 -sWARN_UNALIGNED=1)
-	target_link_options (AssimpJS PUBLIC -sASSERTIONS=0)            # Disable assertions for production
-	
-	# Javascript size optimizations
-	target_link_options (AssimpJS PUBLIC --closure=1)               # Google Closure Compiler optimization
-	
-	# Dynamic memory management for variable file sizes with increased stack for large IFC files
-	target_link_options (AssimpJS PUBLIC -sALLOW_MEMORY_GROWTH=1)   # Allow unlimited memory growth as needed
-	target_link_options (AssimpJS PUBLIC -sSTACK_SIZE=8MB)       # Increase stack size to 8MB for large IFC files
-	
-  # Remove unnecessary runtime features (keeping safe ones)
+	# Exception handling
+	target_link_options (AssimpJS PUBLIC -sDISABLE_EXCEPTION_CATCHING=0)
+
+	# Runtime error handling
+	target_link_options (AssimpJS PUBLIC -sASSERTIONS=1)
+	target_link_options (AssimpJS PUBLIC -sABORTING_MALLOC=1)
+
+	# JS size optimizations (Closure disabled for faster builds; re-enable for release)
+	# target_link_options (AssimpJS PUBLIC --closure=1)
+
+	# Dynamic memory management
+	target_link_options (AssimpJS PUBLIC -sALLOW_MEMORY_GROWTH=1)
+	target_link_options (AssimpJS PUBLIC -sINITIAL_HEAP=64MB)
+	target_link_options (AssimpJS PUBLIC -sMAXIMUM_MEMORY=2GB)
+	target_link_options (AssimpJS PUBLIC -sSTACK_SIZE=8MB)
+
+	# Runtime features
 	target_link_options (AssimpJS PUBLIC -sSUPPORT_LONGJMP=0)
-	target_link_options (AssimpJS PUBLIC -sNO_EXIT_RUNTIME=1)       # Don't include exit handling
-	
-	# Essential flags for compatibility
-	target_link_options (AssimpJS PUBLIC -sINVOKE_RUN=0)            # Don't auto-run
-	target_link_options (AssimpJS PUBLIC --bind)                    # Enable embind
+	target_link_options (AssimpJS PUBLIC -sEXIT_RUNTIME=0)
+	target_link_options (AssimpJS PUBLIC -sINVOKE_RUN=0)
+	target_link_options (AssimpJS PUBLIC -sFILESYSTEM=1)
+
+	# Embind and BigInt support
+	target_link_options (AssimpJS PUBLIC -lembind)
 	target_link_options (AssimpJS PUBLIC -sWASM_BIGINT)
-	target_link_options (AssimpJS PUBLIC -sLLD_REPORT_UNDEFINED)
-	target_link_options (AssimpJS PUBLIC -sNO_FILESYSTEM=0)
 else ()
 	add_library (AssimpJS ${AssimpJSSourceFiles})
 endif ()
