@@ -3,7 +3,6 @@
 	"version": "0.0.12",
 	"description": "Javascript interface for the assimp library.",
 	"license": "MIT",
-	"type": "module",
 	"main": "./dist/assimpjs-mini.js",
 	"repository": "github:kovacsv/assimpjs",
 	"keywords": [
