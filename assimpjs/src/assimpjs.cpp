@@ -16,8 +16,19 @@ static const aiScene* ImportFileListByMainFile (Assimp::Importer& importer, cons
 			aiProcess_GenUVCoords |
 			aiProcess_JoinIdenticalVertices |
 			aiProcess_SortByPType);
+		if (scene == nullptr) {
+			fprintf(stderr, "[assimpjs] ReadFile returned null: %s\n", importer.GetErrorString());
+		} else {
+			fprintf(stderr, "[assimpjs] ReadFile OK: meshes=%u materials=%u root=%s\n",
+				scene->mNumMeshes, scene->mNumMaterials,
+				scene->mRootNode ? scene->mRootNode->mName.C_Str() : "NULL");
+		}
 		return scene;
+	} catch (const std::exception& e) {
+		fprintf(stderr, "[assimpjs] ReadFile exception: %s\n", e.what());
+		return nullptr;
 	} catch (...) {
+		fprintf(stderr, "[assimpjs] ReadFile unknown exception caught\n");
 		return nullptr;
 	}
 	return nullptr;
@@ -93,6 +104,8 @@ static bool ExportScene (const aiScene* scene, const std::string& format, Result
 	
 	aiReturn exportResult = exporter.Export (scene, assimpFormat.c_str (), fileName.c_str (), 0u, &exportProperties);
 	if (exportResult != aiReturn_SUCCESS) {
+		fprintf(stderr, "[assimpjs] Export failed: format='%s' file='%s' error='%s'\n",
+			assimpFormat.c_str(), fileName.c_str(), exporter.GetErrorString());
 		result.errorCode = ErrorCode::ExportError;
 		return false;
 	}

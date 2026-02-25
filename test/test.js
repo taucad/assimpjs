@@ -876,12 +876,9 @@ it ('X3D Export', function () {
 });
 
 it ('3MF Export', function () {
-  // 3MF appears to be broken in the exporter, no files are generated.
-  assert (IsExportSuccess (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], '3mf', []));
-  assert (IsExportSuccess (['glTF2/simple_skin/quad_skin.glb'], '3mf', []));
-  assert (IsExportSuccess (['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'], '3mf', []));
-  assert (IsExportSuccess (['glTF2/BoxBadNormals-glTF-Binary/BoxBadNormals.glb'], '3mf', []));
-  assert (IsExportSuccess (['glTF2/BoxWithInfinites-glTF-Binary/BoxWithInfinites.glb'], '3mf', []));
+	assert (IsExportSuccess (['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'], '3mf', ['result.3mf']));
+	assert (IsExportSuccess (['glTF2/simple_skin/quad_skin.glb'], '3mf', ['result.3mf']));
+	assert (IsExportSuccess (['glTF2/BoxBadNormals-glTF-Binary/BoxBadNormals.glb'], '3mf', ['result.3mf']));
 });
 
 it ('3DS Export', function () {

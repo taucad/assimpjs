@@ -56,6 +56,7 @@ elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseAll")
   set (ASSIMP_BUILD_VRML_IMPORTER ON CACHE BOOL "")
   set (ASSIMP_BUILD_IFC_IMPORTER ON CACHE BOOL "")
   set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
+  set (ASSIMP_BUILD_3MF_LIB3MF ON CACHE BOOL "")
 elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseExporter")
   # ReleaseExporter: MINIMAL IMPORTERS support (GLTF/GLB/ASSJSON only) but ALL EXPORTERS enabled
   
@@ -69,7 +70,10 @@ elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseExporter")
   
   # USD importer required for USD exporter (shared tinyusdz dependency)
   set (ASSIMP_BUILD_USD_IMPORTER ON CACHE BOOL "")
-  
+
+  # lib3mf for comprehensive 3MF import/export
+  set (ASSIMP_BUILD_3MF_LIB3MF ON CACHE BOOL "")
+
   # Enable most EXPORTERS (excluding problematic ones)
   set (ASSIMP_BUILD_PBRT_EXPORTER OFF CACHE BOOL "")  # Not required
   set (ASSIMP_BUILD_M3D_EXPORTER OFF CACHE BOOL "")  # Disabled due memory leaks
