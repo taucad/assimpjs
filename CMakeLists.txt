@@ -84,8 +84,8 @@ endif()
 if (${EMSCRIPTEN})
   set(CMAKE_CXX_STANDARD 17)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -DNDEBUG")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -DNDEBUG")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG")
 endif()
 
 # build zlib from sources instead of looking for system zlib
@@ -94,7 +94,7 @@ set (ASSIMP_BUILD_ZLIB ON CACHE BOOL "")
 add_subdirectory (assimp)
 
 if (${EMSCRIPTEN})
-	target_compile_options (assimp PUBLIC -fexceptions -Wno-unused-but-set-variable -Wno-unused-const-variable)
+	target_compile_options (assimp PUBLIC -fwasm-exceptions -Wno-unused-but-set-variable -Wno-unused-const-variable -flto -msimd128 -mrelaxed-simd)
 endif ()
 
 # AssimpJS
@@ -110,23 +110,24 @@ source_group ("Sources" FILES ${AssimpJSSourceFiles})
 if (${EMSCRIPTEN})
 	add_executable (AssimpJS ${AssimpJSSourceFiles})
 	target_compile_options (AssimpJS PUBLIC "$<$<CONFIG:Debug>:-gsource-map>")
-	target_compile_options (AssimpJS PUBLIC -fexceptions)
+	target_compile_options (AssimpJS PUBLIC -fwasm-exceptions)
+	target_compile_options (AssimpJS PUBLIC -flto)
+	target_compile_options (AssimpJS PUBLIC -msimd128 -mrelaxed-simd)
 
 	# Module output: ESM with factory function
 	target_link_options (AssimpJS PUBLIC -sMODULARIZE=1)
 	target_link_options (AssimpJS PUBLIC -sEXPORT_NAME=assimpjs)
 	target_link_options (AssimpJS PUBLIC -sEXPORT_ES6=1)
-	target_link_options (AssimpJS PUBLIC -sENVIRONMENT=web,node)
+	target_link_options (AssimpJS PUBLIC -sENVIRONMENT=web,worker,node)
 
-	# Exception handling
-	target_link_options (AssimpJS PUBLIC -sDISABLE_EXCEPTION_CATCHING=0)
+	# Exception handling (native WASM exceptions)
+	target_link_options (AssimpJS PUBLIC -fwasm-exceptions)
 
 	# Runtime error handling
-	target_link_options (AssimpJS PUBLIC -sASSERTIONS=1)
 	target_link_options (AssimpJS PUBLIC -sABORTING_MALLOC=1)
 
-	# JS size optimizations (Closure disabled for faster builds; re-enable for release)
-	# target_link_options (AssimpJS PUBLIC --closure=1)
+	# JS size optimizations
+	target_link_options (AssimpJS PUBLIC --closure=1)
 
 	# Dynamic memory management
 	target_link_options (AssimpJS PUBLIC -sALLOW_MEMORY_GROWTH=1)
@@ -143,6 +144,15 @@ if (${EMSCRIPTEN})
 	# Embind and BigInt support
 	target_link_options (AssimpJS PUBLIC -lembind)
 	target_link_options (AssimpJS PUBLIC -sWASM_BIGINT)
+
+	# Build-time constructor evaluation
+	target_link_options (AssimpJS PUBLIC -sEVAL_CTORS=2)
+
+	# Link-time optimization
+	target_link_options (AssimpJS PUBLIC -flto)
+
+	# SIMD
+	target_link_options (AssimpJS PUBLIC -msimd128 -mrelaxed-simd)
 else ()
 	add_library (AssimpJS ${AssimpJSSourceFiles})
 endif ()
