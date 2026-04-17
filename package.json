@@ -1,10 +1,10 @@
 {
-	"name": "assimpjs",
+	"name": "@taucad/assimpjs",
 	"version": "0.0.13",
 	"description": "Javascript interface for the assimp library.",
 	"license": "MIT",
 	"main": "./dist/assimpjs-mini.js",
-	"repository": "github:kovacsv/assimpjs",
+	"repository": "github:taucad/assimpjs",
 	"keywords": [
 		"assimp",
 		"3d",
