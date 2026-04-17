@@ -7,29 +7,30 @@ if (process.env.TEST_CONFIG !== undefined) {
 	config = process.env.TEST_CONFIG;
 }
 
-// Load AssimpJS builds  
-// Check which builds are available and load accordingly
+// Load AssimpJS builds
+// Check which builds are available and load accordingly.
+// Builds use -sEXPORT_ES6=1 so require() returns { default: factory }.
+function loadBuild (buildPath) {
+	if (!fs.existsSync(buildPath)) {
+		return undefined;
+	}
+	let mod = require(buildPath);
+	let factory = typeof mod === 'function' ? mod : mod.default;
+	return factory();
+}
+
 let assimpjsMini;
 let assimpjsAll;
-
-// Try to load mini build (from separate build directory)
-const miniBuildPath = path.join(__dirname, '../build_wasm_mini/' + config + 'Mini/assimpjs-mini.js');
-if (fs.existsSync(miniBuildPath)) {
-    assimpjsMini = require(miniBuildPath)();
-}
-
-// Try to load all build (from separate build directory)
-const allBuildPath = path.join(__dirname, '../build_wasm_all/' + config + 'All/assimpjs-all.js');
-if (fs.existsSync(allBuildPath)) {
-    assimpjsAll = require(allBuildPath)();
-}
-
-// Try to load exporter build (from separate build directory)
 let assimpjsExporter;
+
+const miniBuildPath = path.join(__dirname, '../build_wasm_mini/' + config + 'Mini/assimpjs-mini.js');
+assimpjsMini = loadBuild(miniBuildPath);
+
+const allBuildPath = path.join(__dirname, '../build_wasm_all/' + config + 'All/assimpjs-all.js');
+assimpjsAll = loadBuild(allBuildPath);
+
 const exporterBuildPath = path.join(__dirname, '../build_wasm_exporter/' + config + 'Exporter/assimpjs-exporter.js');
-if (fs.existsSync(exporterBuildPath)) {
-    assimpjsExporter = require(exporterBuildPath)();
-}
+assimpjsExporter = loadBuild(exporterBuildPath);
 
 let ajsMini = null;
 let ajsAll = null;
@@ -914,4 +915,184 @@ it ('USDZ Export', function () {
 	assert (IsExportSuccess (['glTF2/BoxBadNormals-glTF-Binary/BoxBadNormals.glb'], 'usdz', ['result.usdz']));
 	assert (IsExportSuccess (['glTF2/BoxWithInfinites-glTF-Binary/BoxWithInfinites.glb'], 'usdz', ['result.usdz']));
 });
+});
+
+describe ('Export Options', function () {
+
+function ExportWithOptions (sourceFiles, exportFormat, options, assimpInstance) {
+	assimpInstance = assimpInstance || ajsExporter;
+	if (!assimpInstance) {
+		return null;
+	}
+	let fileList = new assimpInstance.FileList ();
+	for (let i = 0; i < sourceFiles.length; i++) {
+		let filePath = GetTestFileLocation (sourceFiles[i]);
+		fileList.AddFile (filePath, fs.readFileSync (filePath));
+	}
+	return assimpInstance.ConvertFileList (fileList, exportFormat, options);
+}
+
+function ExportWithoutOptions (sourceFiles, exportFormat, assimpInstance) {
+	assimpInstance = assimpInstance || ajsExporter;
+	if (!assimpInstance) {
+		return null;
+	}
+	let fileList = new assimpInstance.FileList ();
+	for (let i = 0; i < sourceFiles.length; i++) {
+		let filePath = GetTestFileLocation (sourceFiles[i]);
+		fileList.AddFile (filePath, fs.readFileSync (filePath));
+	}
+	return assimpInstance.ConvertFileList (fileList, exportFormat);
+}
+
+it ('JSON_SKIP_WHITESPACES false produces pretty-printed output', function () {
+	let testFiles = ['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'];
+
+	let compactResult = ExportWithoutOptions (testFiles, 'assjson');
+	assert (compactResult !== null, 'Exporter build not available');
+	assert (compactResult.IsSuccess (), 'Compact export failed');
+	let compactContent = new TextDecoder ().decode (compactResult.GetFile (0).GetContent ());
+
+	let prettyResult = ExportWithOptions (testFiles, 'assjson', { JSON_SKIP_WHITESPACES: false });
+	assert (prettyResult.IsSuccess (), 'Pretty export failed');
+	let prettyContent = new TextDecoder ().decode (prettyResult.GetFile (0).GetContent ());
+
+	assert (prettyContent.length > compactContent.length,
+		'Pretty output (' + prettyContent.length + ') should be larger than compact (' + compactContent.length + ')');
+	assert (prettyContent.includes ('\n'), 'Pretty output should contain newlines');
+	assert (!compactContent.includes ('\n'), 'Compact output should not contain newlines');
+
+	let compactParsed = JSON.parse (compactContent);
+	let prettyParsed = JSON.parse (prettyContent);
+	assert.deepStrictEqual (prettyParsed, compactParsed, 'Parsed content should be identical regardless of formatting');
+});
+
+it ('EXPORT_XFILE_64BIT changes X file header', function () {
+	let testFiles = ['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'];
+
+	let result32 = ExportWithoutOptions (testFiles, 'x');
+	assert (result32 !== null, 'Exporter build not available');
+	assert (result32.IsSuccess (), '32-bit X export failed');
+	let content32 = new TextDecoder ().decode (result32.GetFile (0).GetContent ());
+	assert (content32.includes ('xof 0303txt 0032'), 'Default X export should use 32-bit header');
+
+	let result64 = ExportWithOptions (testFiles, 'x', { EXPORT_XFILE_64BIT: true });
+	assert (result64.IsSuccess (), '64-bit X export failed');
+	let content64 = new TextDecoder ().decode (result64.GetFile (0).GetContent ());
+	assert (content64.includes ('xof 0303txt 0064'), 'X export with EXPORT_XFILE_64BIT should use 64-bit header');
+});
+
+it ('empty options object produces identical output to 2-arg call', function () {
+	let testFiles = ['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'];
+
+	let resultNoOpts = ExportWithoutOptions (testFiles, 'assjson');
+	assert (resultNoOpts !== null, 'Exporter build not available');
+	assert (resultNoOpts.IsSuccess (), '2-arg export failed');
+	let contentNoOpts = resultNoOpts.GetFile (0).GetContent ();
+
+	let resultEmptyOpts = ExportWithOptions (testFiles, 'assjson', {});
+	assert (resultEmptyOpts.IsSuccess (), '3-arg empty options export failed');
+	let contentEmptyOpts = resultEmptyOpts.GetFile (0).GetContent ();
+
+	assert.strictEqual (contentNoOpts.length, contentEmptyOpts.length,
+		'Output length should be identical');
+	for (let i = 0; i < contentNoOpts.length; i++) {
+		assert.strictEqual (contentNoOpts[i], contentEmptyOpts[i],
+			'Byte mismatch at offset ' + i);
+	}
+});
+
+it ('unknown property keys are silently ignored', function () {
+	let testFiles = ['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'];
+
+	let result = ExportWithOptions (testFiles, 'assjson', {
+		NONEXISTENT_PROPERTY_FOO: true,
+		ANOTHER_FAKE_KEY: 42,
+		IMAGINARY_STRING_OPTION: 'hello'
+	});
+	assert (result !== null, 'Exporter build not available');
+	assert (result.IsSuccess (), 'Export with unknown properties should still succeed');
+	assert (result.FileCount () > 0, 'Should produce output files');
+});
+
+function Extract3MFModelXml (result) {
+	const zlib = require ('zlib');
+	assert (result.IsSuccess (), '3MF export failed: ' + result.GetErrorCode ());
+	assert (result.FileCount () > 0, '3MF export should produce output files');
+
+	let zipBytes = result.GetFile (0).GetContent ();
+	let buf = Buffer.from (zipBytes);
+
+	// 3MF files are ZIP archives. Walk local file headers to find 3D/3dmodel.model.
+	let offset = 0;
+	while (offset + 30 <= buf.length) {
+		let sig = buf.readUInt32LE (offset);
+		if (sig !== 0x04034b50) break; // not a local file header
+
+		let compressionMethod = buf.readUInt16LE (offset + 8);
+		let compressedSize = buf.readUInt32LE (offset + 18);
+		let uncompressedSize = buf.readUInt32LE (offset + 22);
+		let nameLen = buf.readUInt16LE (offset + 26);
+		let extraLen = buf.readUInt16LE (offset + 28);
+		let name = buf.toString ('utf8', offset + 30, offset + 30 + nameLen);
+		let dataStart = offset + 30 + nameLen + extraLen;
+		let dataEnd = dataStart + compressedSize;
+
+		if (name === '3D/3dmodel.model' || name === '/3D/3dmodel.model') {
+			let raw = buf.slice (dataStart, dataEnd);
+			if (compressionMethod === 8) {
+				return zlib.inflateRawSync (raw).toString ('utf8');
+			}
+			return raw.toString ('utf8');
+		}
+		offset = dataEnd;
+	}
+	assert.fail ('3D/3dmodel.model not found in 3MF ZIP archive');
+}
+
+it ('3MF default unit is millimeter', function () {
+	let testFiles = ['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'];
+
+	let result = ExportWithoutOptions (testFiles, '3mf');
+	if (result === null) { return; }
+
+	let xml = Extract3MFModelXml (result);
+	assert (xml.includes ('unit="millimeter"'), 'Default 3MF unit should be millimeter, got: ' + xml.substring (0, 200));
+});
+
+it ('3MF_EXPORT_UNIT changes model unit attribute', function () {
+	let testFiles = ['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'];
+
+	let units = ['micron', 'millimeter', 'centimeter', 'inch', 'foot', 'meter'];
+	for (let unit of units) {
+		let result = ExportWithOptions (testFiles, '3mf', { '3MF_EXPORT_UNIT': unit });
+		if (result === null) { return; }
+
+		let xml = Extract3MFModelXml (result);
+		assert (xml.includes ('unit="' + unit + '"'),
+			'3MF unit should be ' + unit + ', got: ' + xml.substring (0, 200));
+	}
+});
+
+it ('3MF_EXPORT_APPLICATION sets Application metadata', function () {
+	let testFiles = ['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'];
+
+	let result = ExportWithOptions (testFiles, '3mf', { '3MF_EXPORT_APPLICATION': 'TestSlicer 1.0' });
+	if (result === null) { return; }
+
+	let xml = Extract3MFModelXml (result);
+	assert (xml.includes ('TestSlicer 1.0'), 'Application metadata value should be present');
+	assert (xml.includes ('name="Application"'), 'Application metadata name should be present');
+});
+
+it ('3MF without application option omits Application metadata', function () {
+	let testFiles = ['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'];
+
+	let result = ExportWithoutOptions (testFiles, '3mf');
+	if (result === null) { return; }
+
+	let xml = Extract3MFModelXml (result);
+	assert (!xml.includes ('name="Application"'), 'Application metadata should not be present when option is omitted');
+});
+
 });
