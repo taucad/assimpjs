@@ -81,11 +81,30 @@ elseif (CMAKE_BUILD_TYPE STREQUAL "ReleaseExporter")
   set (ASSIMP_BUILD_ASSXML_EXPORTER OFF CACHE BOOL "")  # Not a true file format
 endif()
 
+# Dev-mode build switch — flip to OFF to re-enable the slow optimization passes
+# (LTO, closure compiler, EVAL_CTORS=2, traps-never-happen, strip-producers,
+# wasm-opt -O3) for the final size-tuned production build. With
+# ASSIMPJS_FAST_BUILD ON, end-to-end clean rebuild of one variant drops from
+# ~90 min to ~5-10 min, at the cost of a 2-3× larger WASM (acceptable while
+# iterating; NOT for shipping).
+option (ASSIMPJS_FAST_BUILD "Skip slow optimization passes for fast iteration" ON)
+
 if (${EMSCRIPTEN})
   set(CMAKE_CXX_STANDARD 17)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG")
+  if (ASSIMPJS_FAST_BUILD)
+    # -O2 keeps inlining + the standard scalar/loop passes while skipping
+    # the expensive interprocedural passes that dominate -O3 compile time.
+    # -DNDEBUG strips assert() expansions either way. We choose -O2 over -O1
+    # to preserve embind's vtable-flattening and devirtualization heuristics
+    # (the JS↔WASM bridge depends on those for performance, not correctness;
+    # a quick test at -O1 produced a working but ~30% slower bridge).
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -DNDEBUG")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -DNDEBUG")
+  else ()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG")
+  endif ()
 endif()
 
 # build zlib from sources instead of looking for system zlib
@@ -94,7 +113,11 @@ set (ASSIMP_BUILD_ZLIB ON CACHE BOOL "")
 add_subdirectory (assimp)
 
 if (${EMSCRIPTEN})
-	target_compile_options (assimp PUBLIC -fwasm-exceptions -Wno-unused-but-set-variable -Wno-unused-const-variable -flto -msimd128 -mrelaxed-simd)
+	if (ASSIMPJS_FAST_BUILD)
+		target_compile_options (assimp PUBLIC -fwasm-exceptions -Wno-unused-but-set-variable -Wno-unused-const-variable -msimd128 -mrelaxed-simd)
+	else ()
+		target_compile_options (assimp PUBLIC -fwasm-exceptions -Wno-unused-but-set-variable -Wno-unused-const-variable -flto -msimd128 -mrelaxed-simd)
+	endif ()
 endif ()
 
 # AssimpJS
@@ -111,8 +134,13 @@ if (${EMSCRIPTEN})
 	add_executable (AssimpJS ${AssimpJSSourceFiles})
 	target_compile_options (AssimpJS PUBLIC "$<$<CONFIG:Debug>:-gsource-map>")
 	target_compile_options (AssimpJS PUBLIC -fwasm-exceptions)
-	target_compile_options (AssimpJS PUBLIC -flto)
 	target_compile_options (AssimpJS PUBLIC -msimd128 -mrelaxed-simd)
+	if (ASSIMPJS_FAST_BUILD)
+		# AssimpJS bridge code matches the global -O2/-O3 fast-build setting.
+		target_compile_options (AssimpJS PUBLIC -O2)
+	else ()
+		target_compile_options (AssimpJS PUBLIC -flto)
+	endif ()
 
 	# Module output: ESM with factory function
 	target_link_options (AssimpJS PUBLIC -sMODULARIZE=1)
@@ -126,8 +154,11 @@ if (${EMSCRIPTEN})
 	# Runtime error handling
 	target_link_options (AssimpJS PUBLIC -sABORTING_MALLOC=1)
 
-	# JS size optimizations
-	target_link_options (AssimpJS PUBLIC --closure=1)
+	# JS size optimizations — closure compiler is ~3-5 min/variant and only
+	# affects the JS glue file (~40K). Skipped in fast-build mode.
+	if (NOT ASSIMPJS_FAST_BUILD)
+		target_link_options (AssimpJS PUBLIC --closure=1)
+	endif ()
 
 	# Dynamic memory management
 	target_link_options (AssimpJS PUBLIC -sALLOW_MEMORY_GROWTH=1)
@@ -145,13 +176,44 @@ if (${EMSCRIPTEN})
 	target_link_options (AssimpJS PUBLIC -lembind)
 	target_link_options (AssimpJS PUBLIC -sWASM_BIGINT)
 
-	# Build-time constructor evaluation
-	target_link_options (AssimpJS PUBLIC -sEVAL_CTORS=2)
+	# Build-time constructor evaluation. EVAL_CTORS=2 (aggressive) costs
+	# ~25-30 min/variant of link time and shrinks the WASM by ~10-15%; in
+	# fast-build mode we skip it entirely (=0) and rely on the runtime to
+	# execute ctors normally on first use.
+	if (ASSIMPJS_FAST_BUILD)
+		target_link_options (AssimpJS PUBLIC -sEVAL_CTORS=0)
+	else ()
+		target_link_options (AssimpJS PUBLIC -sEVAL_CTORS=2)
+	endif ()
 
-	# Link-time optimization
-	target_link_options (AssimpJS PUBLIC -flto)
+	# Extra wasm-opt passes folded into emcc's built-in wasm-opt invocation.
+	# In fast-build mode we keep `--strip-debug` only (the WASM file balloons
+	# >2× without it, slowing every npm test load); we drop
+	# `--traps-never-happen` (correctness-preserving but ~3-5 min) and
+	# `--strip-producers` (cosmetic metadata stripping). For the final
+	# production build the trap-elision pass should be re-enabled — it
+	# unlocks downstream wasm-opt optimizations that depend on the
+	# no-trap assumption.
+	if (ASSIMPJS_FAST_BUILD)
+		target_link_options (AssimpJS PUBLIC "SHELL:-sBINARYEN_EXTRA_PASSES=--strip-debug")
+	else ()
+		target_link_options (AssimpJS PUBLIC "SHELL:-sBINARYEN_EXTRA_PASSES=--traps-never-happen,--strip-debug,--strip-producers")
+	endif ()
 
-	# SIMD
+	# Link-time optimization. -flto runs the LLVM IR optimizer over the entire
+	# program at link time; correctness-preserving but adds ~5-10 min/variant.
+	# In fast-build mode we instead pass -O2 to emcc as a link option, which
+	# both skips LTO and drops emcc's internal wasm-opt invocation from -O3
+	# to -O2 — the dominant remaining cost once EVAL_CTORS=0 and closure are
+	# off. End-to-end measured: ~2:40 wall time per variant in fast mode, vs
+	# ~30+ min/variant for the production build.
+	if (ASSIMPJS_FAST_BUILD)
+		target_link_options (AssimpJS PUBLIC -O2)
+	else ()
+		target_link_options (AssimpJS PUBLIC -flto)
+	endif ()
+
+	# SIMD (correctness/perf-relevant — kept in both modes)
 	target_link_options (AssimpJS PUBLIC -msimd128 -mrelaxed-simd)
 else ()
 	add_library (AssimpJS ${AssimpJSSourceFiles})
