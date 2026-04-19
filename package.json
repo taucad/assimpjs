@@ -1,6 +1,6 @@
 {
 	"name": "@taucad/assimpjs",
-	"version": "0.0.13",
+	"version": "0.0.17",
 	"description": "Javascript interface for the assimp library.",
 	"license": "MIT",
 	"main": "./dist/assimpjs-mini.js",
@@ -42,7 +42,7 @@
 	},
 	"scripts": {
 		"start": "http-server",
-		"test": "mocha test --timeout 30000",
+		"test": "mocha test/test.js --timeout 30000",
 		"build": "tools/build_wasm_deb.sh all",
 		"build:mini": "tools/build_wasm_deb.sh ReleaseMini",
 		"build:all": "tools/build_wasm_deb.sh ReleaseAll",

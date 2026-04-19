@@ -62,29 +62,10 @@ if [[ "$BUILD_TYPE" == "all" ]]; then
     emcmake cmake -B build_wasm_exporter -G "Unix Makefiles" -DEMSCRIPTEN=1 -DCMAKE_BUILD_TYPE=ReleaseExporter . || exit 1
     emmake make -C build_wasm_exporter -j"$NPROC" AssimpJS || exit 1
 
-    # wasm-opt post-processing for all variants
-    WASM_OPT="$(dirname "$0")/../emsdk/upstream/bin/wasm-opt"
-    for build_dir in build_wasm_mini/ReleaseMini build_wasm_all/ReleaseAll build_wasm_exporter/ReleaseExporter; do
-        for wasm_file in "$build_dir"/*.wasm; do
-            if [ -f "$wasm_file" ]; then
-                echo "Running wasm-opt on $(basename "$wasm_file")..."
-                "$WASM_OPT" "$wasm_file" \
-                    -O4 \
-                    --strip-debug \
-                    --strip-producers \
-                    --enable-mutable-globals \
-                    --enable-bulk-memory \
-                    --enable-sign-ext \
-                    --enable-nontrapping-float-to-int \
-                    --enable-simd \
-                    --enable-relaxed-simd \
-                    --enable-exception-handling \
-                    --traps-never-happen \
-                    -o "$wasm_file"
-                echo "wasm-opt complete: $(wc -c < "$wasm_file") bytes"
-            fi
-        done
-    done
+    # NOTE: the standalone post-link `wasm-opt -O4` pass was folded into emcc's
+    # built-in wasm-opt invocation via BINARYEN_EXTRA_PASSES in CMakeLists.txt
+    # (--traps-never-happen,--strip-debug,--strip-producers). Running wasm-opt
+    # twice was duplicating ~30 minutes of work per variant.
 
     echo "Running tests..."
     npm run test || exit 1
@@ -113,27 +94,8 @@ else
     emcmake cmake -B "$BUILD_DIR" -G "Unix Makefiles" -DEMSCRIPTEN=1 -DCMAKE_BUILD_TYPE="$BUILD_TYPE" . || exit 1
     emmake make -C "$BUILD_DIR" -j"$NPROC" AssimpJS || exit 1
 
-    # wasm-opt post-processing
-    WASM_OPT="$(dirname "$0")/../emsdk/upstream/bin/wasm-opt"
-    for wasm_file in "$BUILD_DIR"/"$BUILD_TYPE"/*.wasm; do
-        if [ -f "$wasm_file" ]; then
-            echo "Running wasm-opt on $(basename "$wasm_file")..."
-            "$WASM_OPT" "$wasm_file" \
-                -O4 \
-                --strip-debug \
-                --strip-producers \
-                --enable-mutable-globals \
-                --enable-bulk-memory \
-                --enable-sign-ext \
-                --enable-nontrapping-float-to-int \
-                --enable-simd \
-                --enable-relaxed-simd \
-                --enable-exception-handling \
-                --traps-never-happen \
-                -o "$wasm_file"
-            echo "wasm-opt complete: $(wc -c < "$wasm_file") bytes"
-        fi
-    done
+    # NOTE: post-link wasm-opt pass folded into emcc link via BINARYEN_EXTRA_PASSES.
+    # See the matching note in the `all` branch above.
 
     echo "Running tests..."
     npm run test || exit 1
