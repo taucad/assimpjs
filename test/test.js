@@ -1095,4 +1095,73 @@ it ('3MF without application option omits Application metadata', function () {
 	assert (!xml.includes ('name="Application"'), 'Application metadata should not be present when option is omitted');
 });
 
+// Returns the maximum number of digits after the decimal point across all
+// <vertex x="..." y="..." z="..."/> attributes in a 3MF model XML payload.
+// Used to validate the lib3mf decimal precision setting (R1).
+function MaxVertexDecimalDigits (xml) {
+	let max = 0;
+	let re = /<vertex\s+[^>]*?(?:x|y|z)="(-?\d+(?:\.(\d+))?)"/g;
+	let m;
+	while ((m = re.exec (xml)) !== null) {
+		let frac = m[2];
+		if (frac && frac.length > max) {
+			max = frac.length;
+		}
+	}
+	return max;
+}
+
+it ('3MF default decimal precision yields at least 9 fractional digits', function () {
+	// Cylinder geometry has many non-trivial vertex coordinates so we are
+	// guaranteed at least one with > 6 fractional digits worth of precision.
+	let testFiles = ['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'];
+
+	let result = ExportWithoutOptions (testFiles, '3mf');
+	if (result === null) { return; }
+
+	let xml = Extract3MFModelXml (result);
+	let maxDigits = MaxVertexDecimalDigits (xml);
+	assert (maxDigits >= 9,
+		'Default 3MF precision should yield at least 9 fractional digits, got max ' + maxDigits);
+});
+
+it ('3MF_EXPORT_DECIMAL_PRECISION=12 widens vertex string precision', function () {
+	let testFiles = ['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'];
+
+	let result = ExportWithOptions (testFiles, '3mf', { '3MF_EXPORT_DECIMAL_PRECISION': 12 });
+	if (result === null) { return; }
+
+	let xml = Extract3MFModelXml (result);
+	let maxDigits = MaxVertexDecimalDigits (xml);
+	assert (maxDigits >= 10,
+		'3MF_EXPORT_DECIMAL_PRECISION=12 should yield at least 10 fractional digits ' +
+		'(float precision ceiling), got max ' + maxDigits);
+});
+
+it ('3MF_EXPORT_DECIMAL_PRECISION=3 narrows vertex string precision', function () {
+	let testFiles = ['glTF2/2CylinderEngine-glTF-Binary/2CylinderEngine.glb'];
+
+	let result = ExportWithOptions (testFiles, '3mf', { '3MF_EXPORT_DECIMAL_PRECISION': 3 });
+	if (result === null) { return; }
+
+	let xml = Extract3MFModelXml (result);
+	let maxDigits = MaxVertexDecimalDigits (xml);
+	assert (maxDigits <= 3,
+		'3MF_EXPORT_DECIMAL_PRECISION=3 should cap fractional digits at 3, got max ' + maxDigits);
+});
+
+it ('3MF_EXPORT_DECIMAL_PRECISION rejects out-of-range values', function () {
+	let testFiles = ['glTF2/BoxTextured-glTF-Binary/BoxTextured.glb'];
+
+	// lib3mf valid range is [1, 16]; 0 and 17 must fail conversion.
+	let resultZero = ExportWithOptions (testFiles, '3mf', { '3MF_EXPORT_DECIMAL_PRECISION': 0 });
+	if (resultZero === null) { return; }
+	assert (!resultZero.IsSuccess (),
+		'3MF export with precision=0 must fail (lib3mf rejects values < 1)');
+
+	let resultTooHigh = ExportWithOptions (testFiles, '3mf', { '3MF_EXPORT_DECIMAL_PRECISION': 17 });
+	assert (!resultTooHigh.IsSuccess (),
+		'3MF export with precision=17 must fail (lib3mf rejects values > 16)');
+});
+
 });

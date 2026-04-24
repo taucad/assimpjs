@@ -114,9 +114,9 @@ add_subdirectory (assimp)
 
 if (${EMSCRIPTEN})
 	if (ASSIMPJS_FAST_BUILD)
-		target_compile_options (assimp PUBLIC -fwasm-exceptions -Wno-unused-but-set-variable -Wno-unused-const-variable -msimd128 -mrelaxed-simd)
+		target_compile_options (assimp PUBLIC -fwasm-exceptions -Wno-unused-but-set-variable -Wno-unused-const-variable -msimd128)
 	else ()
-		target_compile_options (assimp PUBLIC -fwasm-exceptions -Wno-unused-but-set-variable -Wno-unused-const-variable -flto -msimd128 -mrelaxed-simd)
+		target_compile_options (assimp PUBLIC -fwasm-exceptions -Wno-unused-but-set-variable -Wno-unused-const-variable -flto -msimd128)
 	endif ()
 endif ()
 
@@ -134,7 +134,7 @@ if (${EMSCRIPTEN})
 	add_executable (AssimpJS ${AssimpJSSourceFiles})
 	target_compile_options (AssimpJS PUBLIC "$<$<CONFIG:Debug>:-gsource-map>")
 	target_compile_options (AssimpJS PUBLIC -fwasm-exceptions)
-	target_compile_options (AssimpJS PUBLIC -msimd128 -mrelaxed-simd)
+	target_compile_options (AssimpJS PUBLIC -msimd128)
 	if (ASSIMPJS_FAST_BUILD)
 		# AssimpJS bridge code matches the global -O2/-O3 fast-build setting.
 		target_compile_options (AssimpJS PUBLIC -O2)
@@ -213,8 +213,10 @@ if (${EMSCRIPTEN})
 		target_link_options (AssimpJS PUBLIC -flto)
 	endif ()
 
-	# SIMD (correctness/perf-relevant — kept in both modes)
-	target_link_options (AssimpJS PUBLIC -msimd128 -mrelaxed-simd)
+	# SIMD (Safari-compatible: -msimd128 only; -mrelaxed-simd dropped per
+	# docs/research/safari-wasm-relaxed-simd-incompatibility.md — Safari 26.0
+	# WebKit/JSC rejects relaxed-SIMD opcodes at parse time.)
+	target_link_options (AssimpJS PUBLIC -msimd128)
 else ()
 	add_library (AssimpJS ${AssimpJSSourceFiles})
 endif ()
